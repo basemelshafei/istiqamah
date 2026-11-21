@@ -417,9 +417,16 @@ private fun ProfileCard(prefs: Prefs) {
 
 @Composable
 fun LabelValue(label: String, value: String, color: androidx.compose.ui.graphics.Color) {
+    // The dot carries the series colour; the number stays in text colour so it's always readable.
     Column {
-        Text(label, color = Night.Muted, fontSize = 12.sp)
-        Text(value, color = color, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (color != Night.Text) {
+                Box(Modifier.size(8.dp).clip(androidx.compose.foundation.shape.CircleShape).background(color))
+                Spacer(Modifier.width(6.dp))
+            }
+            Text(label, color = Night.Muted, fontSize = 12.sp)
+        }
+        Text(value, color = Night.Text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
     }
 }
 
