@@ -66,15 +66,17 @@ fun TodayScreen(onOpen: (Tab) -> Unit) {
         // Activity rings: one per area, the day's score in the middle
         Card {
             val scores = Pillar.entries.associateWith { Plan.pillarScore(items, it) }
+            // Smaller phones get smaller rings so the labels keep a full line each.
+            val narrow = LocalConfiguration.current.screenWidthDp < 380
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ActivityRings(
                     RingOrder.map { RingValue(scores.getValue(it) / 100f, pillarColor(it)) },
-                    size = 140.dp, stroke = 13.dp, gap = 2.dp,
+                    size = if (narrow) 108.dp else 140.dp, stroke = if (narrow) 10.dp else 13.dp, gap = 2.dp,
                     description = "Today's score $score out of 100. " + RingOrder.joinToString(". ") { "${it.label} ${scores.getValue(it)}" },
                 ) {
                     Text("$score", color = Night.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 }
-                Spacer(Modifier.width(18.dp))
+                Spacer(Modifier.width(if (narrow) 12.dp else 18.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     RingOrder.forEach { p -> RingLegend(p.label, scores.getValue(p), pillarColor(p)) { onOpen(tabFor(p)) } }
                 }
@@ -202,8 +204,8 @@ private fun RingLegend(label: String, score: Int, color: androidx.compose.ui.gra
     ) {
         Box(Modifier.size(10.dp).clip(CircleShape).background(color))
         Spacer(Modifier.width(8.dp))
-        Text(label, color = Night.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-        Text("$score", color = Night.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = Night.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f), maxLines = 1, softWrap = false)
+        Text("$score", color = Night.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         Text("/100", color = Night.Muted, fontSize = 12.sp)
     }
 }

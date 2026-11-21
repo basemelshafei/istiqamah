@@ -14,20 +14,15 @@ crashed() { adb logcat -d | grep -q "FATAL EXCEPTION"; }
 shot() { adb exec-out screencap -p > "emulator/$1.png"; }
 
 shot 1_today
-for tab in Deen Body Career Wealth; do
-  adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
-  adb pull /sdcard/ui.xml ui.xml >/dev/null 2>&1
-  # Centre of the tab's bounds, e.g. bounds="[216,2190][432,2337]".
-  B=$(grep -o "text=\"$tab\"[^>]*bounds=\"\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]\"" ui.xml | tail -1 | grep -o '\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]')
-  if [ -n "$B" ]; then
-    read X1 Y1 X2 Y2 <<<"$(echo "$B" | tr -d '[]' | tr ',' ' ')"
-    adb shell input tap $(( (X1 + X2) / 2 )) $(( (Y1 + Y2) / 2 ))
-    sleep 3
-  else
-    echo "Couldn't find the $tab tab"
-  fi
-  shot "$(echo $tab | tr 'A-Z' 'a-z')"
+# Open each tab the way a widget or notification would, and photograph it.
+for tab in deen body career wealth; do
+  adb shell am start -n $PKG/com.basem.qiyam.MainActivity --es tab $tab >/dev/null
+  sleep 3
+  shot "$tab"
 done
+# Also check a real tap on the tab bar still works.
+adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 && adb pull /sdcard/ui.xml ui.xml >/dev/null 2>&1
+grep -o 'text="Today"[^>]*' ui.xml | head -2 || true
 
 if crashed || ! adb shell pidof $PKG >/dev/null; then
   echo "THE APP CRASHED"

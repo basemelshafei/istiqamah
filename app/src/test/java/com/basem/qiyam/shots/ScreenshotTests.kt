@@ -67,3 +67,18 @@ class LargeTextScreenshots {
         Shots.tab(rule, "tab_wealth"); Shots.save(rule, "large_5_wealth")
     }
 }
+
+/** A small phone (320dp wide), where cramped layouts show first. */
+@RunWith(AndroidJUnit4::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [34], qualifiers = "w320dp-h2600dp-xhdpi")
+class SmallPhoneScreenshots {
+    init { Motion.live = false }
+
+    @get:Rule val rule = createAndroidComposeRule<MainActivity>()
+
+    @Test fun today() {
+        Shots.seed(rule.activity)
+        Shots.save(rule, "small_1_today")
+    }
+}

@@ -1,6 +1,7 @@
 package com.basem.qiyam
 
 import android.Manifest
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -52,11 +53,22 @@ import com.basem.qiyam.ui.Rings
 import com.basem.qiyam.ui.QiyamTheme
 
 class MainActivity : ComponentActivity() {
+    /** A tab asked for from outside (a widget, a notification, or the build's emulator test). */
+    private val requestedTab = mutableStateOf<Tab?>(null)
+
+    private fun tabFrom(i: Intent?) = i?.getStringExtra("tab")?.let { name -> Tab.entries.firstOrNull { it.name.equals(name, true) } }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        requestedTab.value = tabFrom(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        requestedTab.value = tabFrom(intent)
         Secrets.migrate(this)
         SyncWorker.schedule(this)
-        setContent { QiyamTheme { AppShell() } }
+        setContent { QiyamTheme { AppShell(requestedTab.value) } }
     }
 
     /** Each time you open the app: refresh anything that's gone stale (the background worker does the rest). */
@@ -77,10 +89,11 @@ enum class Tab(val label: String, val glyph: G, val color: Color) {
 }
 
 @Composable
-private fun AppShell() {
+private fun AppShell(requested: Tab?) {
     val ctx = LocalContext.current
     val prefs = remember { Prefs(ctx) }
-    var tab by rememberSaveable { mutableStateOf(Tab.TODAY) }
+    var tab by rememberSaveable { mutableStateOf(requested ?: Tab.TODAY) }
+    LaunchedEffect(requested) { if (requested != null) tab = requested }
 
     // Prayer times need your location: ask once, on first launch.
     val locationPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
