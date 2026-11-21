@@ -383,8 +383,17 @@ private fun ConnectedApps(prefs: Prefs) {
             }
         }
         if (prefs.lyftaKey.isBlank()) {
+            TextButton(onClick = {
+                runCatching {
+                    ctx.startActivity(
+                        Intent(Intent.ACTION_VIEW, Uri.parse("https://my.lyfta.app/community/api")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }
+            }, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
+                Text("Get key on my.lyfta.app", color = Night.Gold, fontSize = 15.sp)
+            }
             Text(
-                "On my.lyfta.app, open Settings › API and generate a key. Paste it here. It stays on this phone.",
+                "Get your key on Lyfta's website (not the app): tap Get key, sign in, generate a key, then paste it here. It stays on this phone.",
                 color = Night.Muted, fontSize = 13.sp,
             )
             OutlinedTextField(
