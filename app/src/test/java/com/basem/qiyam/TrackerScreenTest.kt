@@ -77,4 +77,14 @@ class TrackerScreenTest {
         assertTrue(6 in Prefs(rule.activity).gymDays)
         rule.onNodeWithText("Sa").assertIsSelected()
     }
+
+    @Test
+    fun careerTabLogsStudy() {
+        rule.onNodeWithTag("tab_career").performClick()
+        settle()
+        rule.onNodeWithTag("study_30").performScrollTo().performClick()
+        settle()
+        assertEquals(30, Career.studyMinutes(log, today))
+        rule.onNodeWithText("30 / 45 min").assertExists()
+    }
 }

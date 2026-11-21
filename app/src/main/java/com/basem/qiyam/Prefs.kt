@@ -93,6 +93,16 @@ class Prefs(context: Context) {
         get() = long("lyftaSynced", 0L)
         set(v) = edit { putLong("lyftaSynced", v) }
 
+    // --- Generic access for the Career and Wealth stores ---------------------------------------
+    fun getInt(k: String, d: Int = 0) = int(k, d)
+    fun putInt(k: String, v: Int) = edit { putInt(k, v) }
+    fun getStr(k: String, d: String = "") = str(k, d)
+    fun putStr(k: String, v: String) = edit { putString(k, v) }
+    fun getBool(k: String, d: Boolean = false) = bool(k, d)
+    fun putBool(k: String, v: Boolean) = edit { putBoolean(k, v) }
+    fun getLong(k: String, d: Long = 0L) = long(k, d)
+    fun putLong(k: String, v: Long) = edit { putLong(k, v) }
+
     // --- Streaks ----------------------------------------------------------------------------
 
     /** Nights (keyed by the date of their Fajr) on which you got up. */

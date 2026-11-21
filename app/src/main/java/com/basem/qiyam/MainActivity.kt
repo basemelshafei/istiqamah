@@ -55,15 +55,25 @@ class MainActivity : ComponentActivity() {
         setContent { QiyamTheme { AppShell() } }
     }
 
-    /** Each time you open the app: read Qiyam, pull fresh Fitbit data, and Lyfta if it's been a while. */
+    /** Each time you open the app: read Qiyam and Fitbit; refresh Lyfta, GitHub and brokers if it's been a while. */
     override fun onResume() {
         super.onResume()
         lifecycleScope.launch {
             withContext(Dispatchers.IO) { QiyamLink.sync(this@MainActivity) }
             runCatching { Health.sync(this@MainActivity) }
             val p = Prefs(this@MainActivity)
-            if (p.lyftaKey.isNotBlank() && System.currentTimeMillis() - p.lyftaSyncedAt > 15 * 60_000L) {
+            val now = System.currentTimeMillis()
+            if (p.lyftaKey.isNotBlank() && now - p.lyftaSyncedAt > 15 * 60_000L) {
                 withContext(Dispatchers.IO) { runCatching { Lyfta.sync(this@MainActivity) } }
+            }
+            withContext(Dispatchers.IO) {
+                if (GitHub.user(p).isNotBlank() && now - p.getLong("ghSynced") > 20 * 60_000L) runCatching { GitHub.sync(this@MainActivity) }
+                if (p.getStr("t212Key").isNotBlank() && now - (Wealth.platforms(p).firstOrNull { it.id == "t212" }?.syncedAt ?: 0L) > 30 * 60_000L) {
+                    runCatching { Wealth.syncTrading212(this@MainActivity) }
+                }
+                if (p.getStr("etoroUserKey").isNotBlank() && now - (Wealth.platforms(p).firstOrNull { it.id == "etoro" }?.syncedAt ?: 0L) > 30 * 60_000L) {
+                    runCatching { Wealth.syncEtoro(this@MainActivity) }
+                }
             }
         }
     }
@@ -98,22 +108,8 @@ private fun AppShell() {
             Tab.TODAY -> TodayScreen(onOpen = { tab = it })
             Tab.DEEN -> DeenScreen(onOpenQiyam = { QiyamLink.open(ctx) })
             Tab.BODY -> BodyScreen()
-            Tab.CAREER -> ComingSoon(
-                Tab.CAREER,
-                listOf(
-                    "AWS certification: exam countdown, study hours, practice-test scores",
-                    "Portfolio projects with milestones",
-                    "US job pipeline: applied → interview → offer",
-                ),
-            )
-            Tab.WEALTH -> ComingSoon(
-                Tab.WEALTH,
-                listOf(
-                    "Investment log: buys, sells, realised profit and loss",
-                    "Side-hustle income and costs against a monthly target",
-                    "Charts of money invested and money made",
-                ),
-            )
+            Tab.CAREER -> CareerScreen()
+            Tab.WEALTH -> WealthScreen()
         }
     }
 

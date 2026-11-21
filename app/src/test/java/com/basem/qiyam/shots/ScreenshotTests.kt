@@ -17,7 +17,7 @@ import org.robolectric.annotation.GraphicsMode
 
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [34], qualifiers = "w393dp-h1700dp-xxhdpi")
+@Config(sdk = [34], qualifiers = "w393dp-h2600dp-xxhdpi")
 class PhoneScreenshots {
     init { Motion.live = false }
 
@@ -35,7 +35,7 @@ class PhoneScreenshots {
 
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [34], qualifiers = "w393dp-h1700dp-night-xxhdpi")
+@Config(sdk = [34], qualifiers = "w393dp-h2600dp-night-xxhdpi")
 class PhoneScreenshotsDark {
     init { Motion.live = false }
 
@@ -46,5 +46,7 @@ class PhoneScreenshotsDark {
         Shots.save(rule, "dark_1_today")
         Shots.tab(rule, "tab_deen"); Shots.save(rule, "dark_2_deen")
         Shots.tab(rule, "tab_body"); Shots.save(rule, "dark_3_body")
+        Shots.tab(rule, "tab_career"); Shots.save(rule, "dark_4_career")
+        Shots.tab(rule, "tab_wealth"); Shots.save(rule, "dark_5_wealth")
     }
 }

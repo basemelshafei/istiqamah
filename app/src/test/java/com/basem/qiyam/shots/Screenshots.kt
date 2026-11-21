@@ -66,6 +66,30 @@ object Shots {
             fajr = java.time.Instant.now().plusSeconds(10 * 3600), telegram = true,
         )
         prefs.qiyamSeenAt = System.currentTimeMillis()
+        // Career
+        com.basem.qiyam.Career.setExamDate(prefs, today.plusDays(62))
+        listOf("secure" to 2, "resilient" to 2, "performing" to 1, "cost" to 1).forEach { (id, v) -> com.basem.qiyam.Career.setConfidence(prefs, id, v) }
+        listOf(28L to 612, 21L to 655, 14L to 690, 7L to 731, 2L to 748).forEach { (ago, sc) ->
+            com.basem.qiyam.Career.addScore(prefs, com.basem.qiyam.PracticeScore(today.minusDays(ago), sc, if (ago > 10) "Tutorials Dojo" else "AWS Skill Builder"))
+        }
+        listOf("c_net" to 2, "c_iam" to 2, "c_compute" to 1, "c_serverless" to 1, "c_iac" to 1, "c_containers" to 1).forEach { (id, v) -> com.basem.qiyam.Career.setTopicLevel(prefs, id, v) }
+        com.basem.qiyam.Career.addProject(prefs, "Kafka-Coaims", "https://github.com/basemelshafei/Kafka-Coaims")
+        com.basem.qiyam.Career.addProject(prefs, "Battery_Vision_Pipeline", "")
+        com.basem.qiyam.Career.toggleMilestone(prefs, "Kafka-Coaims", 0); com.basem.qiyam.Career.toggleMilestone(prefs, "Kafka-Coaims", 1)
+        prefs.putBool("p_gh", true); prefs.putBool("p_li", true)
+        for (i in 0L..80L) if ((i * 7) % 5 != 0L) log.setValue(today.minusDays(i), "gh", ((i * 13) % 7).toInt())
+        for (i in 1L..6L) com.basem.qiyam.Career.addStudy(log, today.minusDays(i), 30 + (i * 10 % 30).toInt())
+        com.basem.qiyam.Career.addStudy(log, today, 30)
+        // Wealth
+        com.basem.qiyam.Wealth.save(prefs, com.basem.qiyam.Platform("t212", "Trading 212", "GBP", listOf(
+            com.basem.qiyam.Holding("VUAG", "Vanguard S&P 500", 40.0, 3420.0, 3812.4),
+            com.basem.qiyam.Holding("NVDA", "NVIDIA", 6.0, 610.0, 702.3),
+            com.basem.qiyam.Holding("MSFT", "Microsoft", 3.0, 905.0, 951.6)), System.currentTimeMillis()))
+        com.basem.qiyam.Wealth.save(prefs, com.basem.qiyam.Platform("etoro", "eToro", "USD", listOf(
+            com.basem.qiyam.Holding("AMZN", "Amazon", 5.0, 900.0, 1012.0),
+            com.basem.qiyam.Holding("BTC", "Bitcoin", 0.01, 950.0, 880.0)), System.currentTimeMillis()))
+        com.basem.qiyam.Wealth.addIncome(prefs, com.basem.qiyam.IncomeEntry(today.minusDays(3), -24.0, "n8n cloud plan"))
+        prefs.putBool("w_niche", true); prefs.putBool("w_demo", true)
         log.setPrayer(today, Prayer.FAJR, PrayerStatus.JAMAAH)
         log.setValue(today, "adhkar_am", 1)
     }

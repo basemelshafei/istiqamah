@@ -15,7 +15,8 @@ enum class Pillar(val label: String, val emoji: String) {
 
 /** How an item is completed when tapped on the Today screen. */
 /** AUTO items fill in from connected apps (Fitbit via Health Connect) and can't be ticked by hand. */
-enum class ItemKind { TOGGLE, PRAYER, QIYAM, GYM, AUTO }
+/** OPEN items are logged on their own tab (tapping opens it); CODE ticks itself off from GitHub. */
+enum class ItemKind { TOGGLE, PRAYER, QIYAM, GYM, AUTO, OPEN, CODE }
 
 /**
  * One thing to do today.
@@ -46,6 +47,10 @@ object Plan {
     const val W_GYM = 8
     const val W_STEPS = 6
     const val W_SLEEP = 5
+    const val W_STUDY = 8
+    const val W_CODE = 5
+    const val W_HUSTLE = 4
+    const val W_MONEY = 4
 
     fun isFastDay(day: LocalDate) = day.dayOfWeek == DayOfWeek.MONDAY || day.dayOfWeek == DayOfWeek.THURSDAY
 
@@ -120,6 +125,30 @@ object Plan {
                     ((h.sleepMinutes ?: 0L) / 420f).coerceIn(0f, 1f), ItemKind.AUTO,
                 ),
             )
+        }
+        // Career: a focused study block after Fajr, and shipping some code each day.
+        val target = Career.studyTarget(prefs).coerceAtLeast(1)
+        val studied = Career.studyMinutes(log, day)
+        list.add(
+            TodayItem(
+                "aws", "AWS study", if (studied > 0) "$studied of $target min" else "$target min · ${Career.EXAM_CODE}",
+                Pillar.CAREER, p.sunrise.plus(Duration.ofMinutes(30)), W_STUDY,
+                (studied.toFloat() / target).coerceIn(0f, 1f), ItemKind.OPEN,
+            ),
+        )
+        val commits = GitHub.count(log, day)
+        list.add(
+            TodayItem(
+                "code", "Code", if (commits > 0) "$commits on GitHub today" else "Push to a portfolio project",
+                Pillar.CAREER, p.isha.plus(Duration.ofMinutes(45)), W_CODE,
+                if (commits > 0 || log.done(day, "code")) 1f else 0f, ItemKind.CODE,
+            ),
+        )
+
+        // Wealth: steady side-hustle work, and a weekly look at the money.
+        add("hustle", "Side hustle", "30 min on your n8n offer", Pillar.WEALTH, p.maghrib.plus(Duration.ofMinutes(50)), W_HUSTLE)
+        if (day.dayOfWeek == DayOfWeek.SUNDAY) {
+            add("money", "Money check-in", "Portfolios, side income, next week", Pillar.WEALTH, p.isha.plus(Duration.ofMinutes(75)), W_MONEY)
         }
         return list.sortedBy { it.time }
     }

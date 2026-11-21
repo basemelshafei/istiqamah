@@ -59,25 +59,23 @@ fun TodayScreen(onOpen: (Tab) -> Unit) {
     val scoreCard: @Composable () -> Unit = {
         // Activity rings: one per area, the day's score in the middle
         Card {
+            val scores = Pillar.entries.associateWith { Plan.pillarScore(items, it) }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                val deen = Plan.pillarScore(items, Pillar.DEEN)
-                val body = Plan.pillarScore(items, Pillar.BODY)
                 ActivityRings(
-                    listOf(RingValue(deen / 100f, Rings.Deen), RingValue(body / 100f, Rings.Body)),
-                    size = 128.dp, stroke = 15.dp,
+                    Pillar.entries.map { RingValue(scores.getValue(it) / 100f, pillarColor(it)) },
+                    size = 140.dp, stroke = 13.dp, gap = 2.dp,
                 ) {
-                    Text("$score", color = Night.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                    Text("$score", color = Night.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 }
-                Spacer(Modifier.width(20.dp))
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    RingLegend("Deen", deen, Rings.Deen) { onOpen(Tab.DEEN) }
-                    RingLegend("Body", body, Rings.Body) { onOpen(Tab.BODY) }
-                    Text(
-                        "${items.count { it.progress >= 1f }} of ${items.count { it.weight > 0 }} done today",
-                        color = Night.Muted, fontSize = 13.sp,
-                    )
+                Spacer(Modifier.width(18.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Pillar.entries.forEach { p -> RingLegend(p.label, scores.getValue(p), pillarColor(p)) { onOpen(tabFor(p)) } }
                 }
             }
+            Text(
+                "${items.count { it.progress >= 1f }} of ${items.count { it.weight > 0 }} done today",
+                color = Night.Muted, fontSize = 13.sp,
+            )
         }
     }
     val nextUp: @Composable () -> Unit = {
@@ -123,6 +121,8 @@ fun TodayScreen(onOpen: (Tab) -> Unit) {
                             else -> gymPicker = true
                         }
                         ItemKind.AUTO -> onOpen(Tab.BODY)
+                        ItemKind.OPEN -> onOpen(tabFor(item.pillar))
+                        ItemKind.CODE -> if (GitHub.count(log, day) > 0) onOpen(Tab.CAREER) else log.toggle(day, "code")
                     }
                 }
             }
@@ -180,13 +180,15 @@ fun TodayScreen(onOpen: (Tab) -> Unit) {
 
 @Composable
 private fun RingLegend(label: String, score: Int, color: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
-    Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Text(label, color = Night.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text("$score", color = color, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Text("/100", color = color, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 3.dp))
-        }
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick), verticalAlignment = Alignment.Bottom) {
+        Text(label, color = Night.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        Text("$score", color = color, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text("/100", color = color, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 3.dp))
     }
+}
+
+fun tabFor(p: Pillar) = when (p) {
+    Pillar.DEEN -> Tab.DEEN; Pillar.BODY -> Tab.BODY; Pillar.CAREER -> Tab.CAREER; Pillar.WEALTH -> Tab.WEALTH
 }
 
 fun pillarColor(p: Pillar) = when (p) {
@@ -199,6 +201,8 @@ fun glyphFor(item: TodayItem): G = when {
     item.kind == ItemKind.GYM -> G.DUMBBELL
     item.id == "steps" -> G.STEPS
     item.id == "sleep" -> G.BED
+    item.id == "aws" -> G.BOOK
+    item.id == "code" -> G.PAPERPLANE
     item.id == "fast" -> G.SUNRISE
     item.id.startsWith("adhkar") -> G.SPARKLE
     item.id.startsWith("quran") -> G.BOOK
