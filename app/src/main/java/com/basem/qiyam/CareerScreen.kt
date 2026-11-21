@@ -115,10 +115,10 @@ private fun AwsCard(prefs: Prefs, log: DayLog, day: LocalDate, readiness: Int) {
                 LabelValue("Today", "$today / ${Career.studyTarget(prefs)} min", Night.Text)
             }
         }
-        SectionTitle("Log study")
+        SectionTitle("Log study (minutes)")
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf(15, 30, 45, 60).forEach { m ->
-                StatusChip("+$m min", false, Rings.Career, modifier = Modifier.weight(1f).testTag("study_$m")) { Career.addStudy(log, day, m) }
+                StatusChip("+$m", false, Rings.Career, modifier = Modifier.weight(1f).testTag("study_$m")) { Career.addStudy(log, day, m) }
             }
         }
         if (today > 0) {
@@ -128,7 +128,7 @@ private fun AwsCard(prefs: Prefs, log: DayLog, day: LocalDate, readiness: Int) {
         }
         OutlinedTextField(
             value = dateText, onValueChange = { dateText = it.trim() },
-            label = { Text("Exam date (YYYY-MM-DD)") }, singleLine = true,
+            label = { Text("Exam date") }, placeholder = { Text("YYYY-MM-DD") }, singleLine = true,
             modifier = Modifier.fillMaxWidth(), colors = fieldColors(),
             trailingIcon = {
                 val parsed = runCatching { LocalDate.parse(dateText) }.getOrNull()

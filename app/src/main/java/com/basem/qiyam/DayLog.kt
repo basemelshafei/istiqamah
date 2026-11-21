@@ -71,4 +71,4 @@ enum class Prayer(val id: String, val label: String, val arabic: String) {
 }
 
 /** Simple gym session types. Stored by name in the log's text for "gym". */
-val GymTypes = listOf("Push", "Pull", "Legs", "Upper", "Lower", "Full body", "Cardio", "Sport")
+val GymTypes = listOf("Push", "Pull", "Legs", "Upper", "Lower", "Full", "Cardio", "Sport")

@@ -70,9 +70,9 @@ fun DeenScreen(onOpenQiyam: () -> Unit) {
                         Spacer(Modifier.width(10.dp))
                         Text(fmt.format(p.time(times)), color = Night.Muted, fontSize = 13.sp)
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 6.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
                         listOf(PrayerStatus.ON_TIME, PrayerStatus.JAMAAH, PrayerStatus.LATE, PrayerStatus.MISSED).forEach { s ->
-                            StatusChip(s.label, status == s, statusColor(s)) {
+                            StatusChip(s.label, status == s, statusColor(s), modifier = Modifier.weight(if (s == PrayerStatus.LATE) 0.8f else 1f)) {
                                 log.setPrayer(day, p, if (status == s) PrayerStatus.NONE else s)
                             }
                         }
@@ -195,17 +195,19 @@ fun StatusChip(
     label: String, on: Boolean, color: Color, enabled: Boolean = true,
     modifier: Modifier = Modifier, compact: Boolean = false, onClick: () -> Unit,
 ) {
+    // Tighter on small phones so a row of four still fits without clipping.
+    val narrow = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 360
     Box(
         modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(50))
             .background(if (on) color else Night.Fill.copy(alpha = if (enabled) Night.Fill.alpha else Night.Fill.alpha / 2))
             .selectable(selected = on, enabled = enabled, role = Role.Checkbox, onClick = onClick)
-            .padding(horizontal = if (compact) 2.dp else 8.dp, vertical = 7.dp),
+            .padding(horizontal = if (compact || narrow) 2.dp else 8.dp, vertical = 7.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             label, maxLines = 1, softWrap = false,
             color = if (on) Night.OnAccent else if (enabled) Night.Text else Night.Muted,
-            fontSize = if (compact) 13.sp else 14.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+            fontSize = if (narrow) 12.sp else if (compact) 13.sp else 14.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
         )
     }
 }
