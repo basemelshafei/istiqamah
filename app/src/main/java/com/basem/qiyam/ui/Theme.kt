@@ -31,14 +31,14 @@ data class Palette(
 
 private val Light = Palette(
     background = Color(0xFFF2F2F7), card = Color.White, separator = Color(0xFFE5E5EA),
-    fill = Color(0x1F767680), label = Color(0xFF000000), secondary = Color(0xFF8A8A8E),
+    fill = Color(0x1F767680), label = Color(0xFF000000), secondary = Color(0xFF6C6C70),
     tint = Color(0xFF007AFF), green = Color(0xFF34C759), orange = Color(0xFFFF9500), red = Color(0xFFFF3B30),
     bar = Color(0xF7F9F9F9),
 )
 
 private val Dark = Palette(
     background = Color(0xFF000000), card = Color(0xFF1C1C1E), separator = Color(0xFF38383A),
-    fill = Color(0x3D767680), label = Color(0xFFFFFFFF), secondary = Color(0xFF8D8D93),
+    fill = Color(0x3D767680), label = Color(0xFFFFFFFF), secondary = Color(0xFF98989F),
     tint = Color(0xFF0A84FF), green = Color(0xFF30D158), orange = Color(0xFFFF9F0A), red = Color(0xFFFF453A),
     bar = Color(0xF0161618),
 )
@@ -67,12 +67,16 @@ object Night {
     val sky: Brush get() = SolidColor(p.background)
 }
 
-/** Apple Fitness-style ring colours, one per area of life. */
+/**
+ * Fitness-style ring colours, one per area of life. Validated for colour-blind separation and
+ * lightness on each mode's surface (rings run Deen, Career, Body, Wealth from the outside in, so
+ * red and green are never neighbours). Numbers are always written in text colour beside them.
+ */
 object Rings {
-    val Deen = Color(0xFF30D158)
-    val Body = Color(0xFFFA114F)
-    val Career = Color(0xFF0A84FF)
-    val Wealth = Color(0xFFFFD60A)
+    val Deen get() = if (Night.isDark) Color(0xFF2AAD4E) else Color(0xFF28B04F)
+    val Career get() = if (Night.isDark) Color(0xFF2A8CFF) else Color(0xFF0A84FF)
+    val Body get() = if (Night.isDark) Color(0xFFF7307A) else Color(0xFFEE2A78)
+    val Wealth get() = if (Night.isDark) Color(0xFFB57C00) else Color(0xFFD08E00)
 }
 
 /** Fixed night-sky colours for the Qiyam dial and the alarm page, which are always dark. */

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -51,7 +52,7 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val Gold = Color(0xFFFFB800)
+private val Gold get() = Rings.Wealth
 
 fun money(v: Double, ccy: String): String {
     val sym = when (ccy) { "GBP" -> "£"; "USD" -> "$"; "EUR" -> "€"; else -> "" }
@@ -66,7 +67,7 @@ private fun signed(v: Double, ccy: String) = (if (v > 0) "+" else "") + money(v,
 fun WealthScreen() {
     val ctx = LocalContext.current
     val prefs = remember { Prefs(ctx) }
-    val day = rememberNow().atZone(prefs.zone).toLocalDate()
+    val day = rememberMinute().atZone(prefs.zone).toLocalDate()
     val platforms = Wealth.platforms(prefs)
     val income = Wealth.income(prefs)
     val thisMonth = Wealth.monthNet(income, YearMonth.from(day))
@@ -140,7 +141,11 @@ private fun PlatformSection(pl: Platform, prefs: Prefs) {
         // Value over time (recorded from the day you connected)
         val hist = Wealth.history(prefs, pl.id)
         if (hist.size >= 2) {
-            Sparkline(hist.map { it.second.toFloat() }, Modifier.fillMaxWidth().height(56.dp), color = if (hist.last().second >= hist.first().second) Night.Good else Night.Dawn)
+            Sparkline(
+                hist.map { it.second.toFloat() }, Modifier.fillMaxWidth().height(56.dp),
+                color = if (hist.last().second >= hist.first().second) Night.Good else Night.Dawn,
+                description = "Account value from ${money(hist.first().second, ccy)} to ${money(hist.last().second, ccy)}",
+            )
             Text("Since ${hist.first().first.format(DateTimeFormatter.ofPattern("d MMM"))}", color = Night.Muted, fontSize = 12.sp)
         } else {
             Text("Value-over-time chart fills in as you open the app over the coming days.", color = Night.Muted, fontSize = 12.sp)
@@ -162,7 +167,17 @@ private fun PlatformSection(pl: Platform, prefs: Prefs) {
         val top = pl.holdings.sortedByDescending { it.value }.take(5)
         if (top.isNotEmpty()) {
             Text("Biggest exposures", color = Night.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            top.forEach { h -> ShareRow(h.symbol, h.value, h.pnlPct, h.value / pl.value.coerceAtLeast(0.01), ccy, h.name) }
+            top.forEach { h ->
+                // Compact: one line each, share first since concentration is the point here.
+                Row(Modifier.heightIn(min = 36.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(String.format(Locale.US, "%.0f%%", h.value / pl.value.coerceAtLeast(0.01) * 100), color = Night.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(48.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(h.symbol, color = Night.Text, fontSize = 15.sp, maxLines = 1)
+                        if (h.name.isNotBlank()) Text(h.name, color = Night.Muted, fontSize = 12.sp, maxLines = 1)
+                    }
+                    Text(money(h.value, ccy), color = Night.Text, fontSize = 14.sp)
+                }
+            }
         }
 
         // Best and worst

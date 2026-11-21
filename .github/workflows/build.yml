@@ -23,16 +23,8 @@ jobs:
         with:
           gradle-version: "8.13"
 
-      - name: Tests (night calculation + screen)
+      - name: Tests (logic, screens, screenshots)
         run: gradle :app:testDebugUnitTest --stacktrace
-
-      - name: Keep screenshots of every screen
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: screenshots
-          path: app/build/screenshots/
-          if-no-files-found: ignore
 
       - name: Keep test reports if anything failed
         if: failure()
@@ -41,20 +33,44 @@ jobs:
           name: test-results
           path: app/build/test-results/
 
-      - name: Build APK
-        run: gradle :app:assembleDebug --stacktrace
-
-      - name: Rename
+      - name: Build the optimised release APK
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk Istiqamah.apk
-          (cd app/build/screenshots && zip -q -r ../../../screenshots.zip .) || true
+          gradle :app:assembleRelease --stacktrace
+          cp app/build/outputs/apk/release/app-release.apk Istiqamah.apk
+          ls -la Istiqamah.apk
+
+      - name: Enable hardware acceleration for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Smoke test on a real Android 14 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash .github/smoke.sh
+
+      - name: Bundle screenshots
+        if: always()
+        run: |
+          mkdir -p shots
+          cp -r app/build/screenshots/* shots/ 2>/dev/null || true
+          cp emulator/*.png shots/ 2>/dev/null || true
+          (cd shots && zip -q -r ../screenshots.zip .) || true
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: Istiqamah-apk
-          path: Istiqamah.apk
+          name: screenshots
+          path: shots/
+          if-no-files-found: ignore
 
-      - name: Publish as a release (easy to download on the phone)
+      - name: Publish as a release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
@@ -65,4 +81,5 @@ jobs:
             screenshots.zip
           body: |
             Install: open this page on your phone, tap **Istiqamah.apk**, then allow "Install unknown apps" for your browser.
-            Updates install over the previous version and keep your streak and settings.
+            Updates install over the previous version and keep your data.
+            Tested: logic and screen tests, plus a smoke test on an Android 14 emulator (every tab opened, no crash).

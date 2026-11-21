@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -39,6 +40,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.basem.qiyam.ui.Badge
@@ -60,7 +63,7 @@ fun CareerScreen() {
     val ctx = LocalContext.current
     val prefs = remember { Prefs(ctx) }
     val log = remember { DayLog(ctx) }
-    val day = rememberNow().atZone(prefs.zone).toLocalDate()
+    val day = rememberMinute().atZone(prefs.zone).toLocalDate()
     val readiness = Career.readiness(prefs)
 
     Page("Career", "${Career.EXAM_CODE} readiness $readiness% · cloud, data, digital manufacturing") {
@@ -168,7 +171,12 @@ private fun PracticeCard(prefs: Prefs, day: LocalDate) {
         SectionTitle("Practice tests")
         Text(Career.verdict(scores), color = Night.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         if (scores.isNotEmpty()) {
-            ScoreChart(scores.map { it.score }, Modifier.fillMaxWidth().height(90.dp))
+            ScoreChart(
+                scores.map { it.score },
+                Modifier.fillMaxWidth().height(90.dp).semantics {
+                    contentDescription = "Practice scores: " + scores.takeLast(5).joinToString(", ") { "${it.score}" } + ". Pass mark ${Career.PASS}."
+                },
+            )
             scores.takeLast(4).reversed().forEach { s ->
                 Row {
                     Text(s.date.format(DateTimeFormatter.ofPattern("d MMM")), color = Night.Muted, fontSize = 14.sp, modifier = Modifier.width(64.dp))
@@ -236,7 +244,7 @@ private fun InterviewCard(prefs: Prefs) {
         Bar(prog, Rings.Career)
         track.topics.forEach { topic ->
             val level = Career.topicLevel(prefs, topic.id)
-            Row(Modifier.fillMaxWidth().clickable { Career.setTopicLevel(prefs, topic.id, (level + 1) % 3) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).clickable { Career.setTopicLevel(prefs, topic.id, (level + 1) % 3) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier.size(22.dp).clip(androidx.compose.foundation.shape.CircleShape)
                         .background(
@@ -246,7 +254,10 @@ private fun InterviewCard(prefs: Prefs) {
                 ) { if (level == 2) Glyph(G.CHECK, Night.OnAccent, 14.dp) }
                 Spacer(Modifier.width(10.dp))
                 Text(topic.label, color = Night.Text, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                Text(listOf("New", "Learning", "Confident")[level], color = Night.Muted, fontSize = 12.sp)
+                Text(
+                    listOf("New", "Learning", "Confident")[level], color = Night.Muted, fontSize = 12.sp,
+                    modifier = Modifier.width(72.dp).padding(start = 8.dp), textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                )
             }
         }
         Text("Tap a topic to move it: new → learning → confident.", color = Night.Muted, fontSize = 12.sp)
@@ -377,6 +388,11 @@ private fun GitHubCard(prefs: Prefs, log: DayLog, day: LocalDate) {
                 scope.launch { status = withContext(Dispatchers.IO) { runCatching { GitHub.sync(ctx) }.getOrElse { "Couldn't reach GitHub" } } }
             }) { Text("Save and sync", color = Night.Gold, fontSize = 15.sp) }
             status?.let { Text(it, color = Night.Muted, fontSize = 13.sp) }
+        }
+        if (GitHub.token(prefs).isNotBlank()) {
+            TextButton(onClick = { prefs.putStr("ghToken", ""); prefs.putBool("ghExact", false) }, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
+                Text("Remove token", color = Night.Dawn, fontSize = 14.sp)
+            }
         }
     }
 }

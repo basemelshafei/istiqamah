@@ -14,13 +14,17 @@ import java.time.ZoneId
 object Changes {
     private val counter = mutableIntStateOf(0)
     fun watch() { counter.intValue }
+
+    /** Changes on every save; use as a key to recompute derived data only when something changed. */
+    val version: Int get() = counter.intValue
     fun bump() { counter.intValue++ }
 }
 
 /** Settings and long-lived state. Day-by-day records live in [DayLog]. */
 class Prefs(context: Context) {
+    private val app = context.applicationContext
     private val sp: SharedPreferences =
-        context.applicationContext.getSharedPreferences("qiyam", Context.MODE_PRIVATE)
+        app.getSharedPreferences("qiyam", Context.MODE_PRIVATE)
 
     private fun watch() = Changes.watch()
 
@@ -86,8 +90,8 @@ class Prefs(context: Context) {
 
     /** Personal Lyfta API key (my.lyfta.app › API). Stays on this phone. */
     var lyftaKey: String
-        get() = str("lyftaKey", "")
-        set(v) = edit { putString("lyftaKey", v.trim()) }
+        get() = Secrets.get(app, "lyftaKey")
+        set(v) = Secrets.put(app, "lyftaKey", v)
 
     var lyftaSyncedAt: Long
         get() = long("lyftaSynced", 0L)
@@ -96,8 +100,8 @@ class Prefs(context: Context) {
     // --- Generic access for the Career and Wealth stores ---------------------------------------
     fun getInt(k: String, d: Int = 0) = int(k, d)
     fun putInt(k: String, v: Int) = edit { putInt(k, v) }
-    fun getStr(k: String, d: String = "") = str(k, d)
-    fun putStr(k: String, v: String) = edit { putString(k, v) }
+    fun getStr(k: String, d: String = "") = if (k in Secrets.NAMES) Secrets.get(app, k).ifEmpty { d } else str(k, d)
+    fun putStr(k: String, v: String) = if (k in Secrets.NAMES) Secrets.put(app, k, v) else edit { putString(k, v) }
     fun getBool(k: String, d: Boolean = false) = bool(k, d)
     fun putBool(k: String, v: Boolean) = edit { putBoolean(k, v) }
     fun getLong(k: String, d: Long = 0L) = long(k, d)

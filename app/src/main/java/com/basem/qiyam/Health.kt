@@ -34,6 +34,15 @@ object Health {
         HealthPermission.getReadPermission(WeightRecord::class),
     )
 
+    /** What we ask for: the above, plus reading while the app is closed (for background refresh). */
+    val request = permissions + HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND
+
+    /** Turns off Istiqamah's access to Health Connect entirely. */
+    suspend fun disconnect(ctx: Context) {
+        runCatching { HealthConnectClient.getOrCreate(ctx).permissionController.revokeAllPermissions() }
+        Prefs(ctx).healthSyncedAt = 0L
+    }
+
     enum class Status { NOT_INSTALLED, NEEDS_PERMISSION, CONNECTED }
 
     fun installed(ctx: Context): Boolean = runCatching {

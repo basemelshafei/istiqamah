@@ -77,6 +77,12 @@ object Lyfta {
         }
     }
 
+    /** Forgets cached workouts (used when disconnecting). */
+    fun clear(ctx: Context) {
+        cache(ctx).delete()
+        Prefs(ctx).lyftaSyncedAt = 0L
+    }
+
     fun workouts(ctx: Context): List<LyftaWorkout> {
         Changes.watch()
         val f = cache(ctx)

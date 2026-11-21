@@ -7,6 +7,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,29 +54,16 @@ import com.basem.qiyam.ui.QiyamTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Secrets.migrate(this)
+        SyncWorker.schedule(this)
         setContent { QiyamTheme { AppShell() } }
     }
 
-    /** Each time you open the app: read Qiyam and Fitbit; refresh Lyfta, GitHub and brokers if it's been a while. */
+    /** Each time you open the app: refresh anything that's gone stale (the background worker does the rest). */
     override fun onResume() {
         super.onResume()
         lifecycleScope.launch {
-            withContext(Dispatchers.IO) { QiyamLink.sync(this@MainActivity) }
-            runCatching { Health.sync(this@MainActivity) }
-            val p = Prefs(this@MainActivity)
-            val now = System.currentTimeMillis()
-            if (p.lyftaKey.isNotBlank() && now - p.lyftaSyncedAt > 15 * 60_000L) {
-                withContext(Dispatchers.IO) { runCatching { Lyfta.sync(this@MainActivity) } }
-            }
-            withContext(Dispatchers.IO) {
-                if (GitHub.user(p).isNotBlank() && now - p.getLong("ghSynced") > 20 * 60_000L) runCatching { GitHub.sync(this@MainActivity) }
-                if (p.getStr("t212Key").isNotBlank() && now - (Wealth.platforms(p).firstOrNull { it.id == "t212" }?.syncedAt ?: 0L) > 30 * 60_000L) {
-                    runCatching { Wealth.syncTrading212(this@MainActivity) }
-                }
-                if (p.getStr("etoroUserKey").isNotBlank() && now - (Wealth.platforms(p).firstOrNull { it.id == "etoro" }?.syncedAt ?: 0L) > 30 * 60_000L) {
-                    runCatching { Wealth.syncEtoro(this@MainActivity) }
-                }
-            }
+            withContext(Dispatchers.IO) { SyncWorker.syncAll(this@MainActivity, onlyIfStaleMinutes = 20) }
         }
     }
 }
@@ -104,12 +93,14 @@ private fun AppShell() {
     BackHandler(enabled = tab != Tab.TODAY) { tab = Tab.TODAY }
 
     val content: @Composable () -> Unit = {
-        when (tab) {
+        Crossfade(targetState = tab, animationSpec = tween(if (com.basem.qiyam.ui.Motion.live) 180 else 0), label = "tab") { shown ->
+        when (shown) {
             Tab.TODAY -> TodayScreen(onOpen = { tab = it })
             Tab.DEEN -> DeenScreen(onOpenQiyam = { QiyamLink.open(ctx) })
             Tab.BODY -> BodyScreen()
             Tab.CAREER -> CareerScreen()
             Tab.WEALTH -> WealthScreen()
+        }
         }
     }
 

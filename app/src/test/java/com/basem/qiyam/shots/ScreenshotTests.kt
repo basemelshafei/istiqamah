@@ -50,3 +50,20 @@ class PhoneScreenshotsDark {
         Shots.tab(rule, "tab_wealth"); Shots.save(rule, "dark_5_wealth")
     }
 }
+
+/** Largest-text check: the most common accessibility setting that breaks layouts. */
+@RunWith(AndroidJUnit4::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [34], qualifiers = "w393dp-h2600dp-xxhdpi", fontScale = 1.3f)
+class LargeTextScreenshots {
+    init { Motion.live = false }
+
+    @get:Rule val rule = createAndroidComposeRule<MainActivity>()
+
+    @Test fun keyScreens() {
+        Shots.seed(rule.activity)
+        Shots.save(rule, "large_1_today")
+        Shots.tab(rule, "tab_career"); Shots.save(rule, "large_4_career")
+        Shots.tab(rule, "tab_wealth"); Shots.save(rule, "large_5_wealth")
+    }
+}

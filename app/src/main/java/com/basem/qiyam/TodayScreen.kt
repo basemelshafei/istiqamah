@@ -27,7 +27,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -48,9 +51,12 @@ fun TodayScreen(onOpen: (Tab) -> Unit) {
     val prefs = remember { Prefs(ctx) }
     val log = remember { DayLog(ctx) }
     val zone = prefs.zone
-    val now = rememberNow()
+    val now = rememberMinute()
     val day = now.atZone(zone).toLocalDate()
-    val items = Plan.items(prefs, log, day, zone)
+    // Built once per change, not on every redraw.
+    val version = Changes.version
+    val items = remember(day, version) { Plan.items(prefs, log, day, zone) }
+    val haptic = LocalHapticFeedback.current
     val score = Plan.score(items)
     val fmt = DateTimeFormatter.ofPattern("HH:mm").withZone(zone)
     var gymPicker by remember { mutableStateOf(false) }
@@ -62,14 +68,15 @@ fun TodayScreen(onOpen: (Tab) -> Unit) {
             val scores = Pillar.entries.associateWith { Plan.pillarScore(items, it) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ActivityRings(
-                    Pillar.entries.map { RingValue(scores.getValue(it) / 100f, pillarColor(it)) },
+                    RingOrder.map { RingValue(scores.getValue(it) / 100f, pillarColor(it)) },
                     size = 140.dp, stroke = 13.dp, gap = 2.dp,
+                    description = "Today's score $score out of 100. " + RingOrder.joinToString(". ") { "${it.label} ${scores.getValue(it)}" },
                 ) {
                     Text("$score", color = Night.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.width(18.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Pillar.entries.forEach { p -> RingLegend(p.label, scores.getValue(p), pillarColor(p)) { onOpen(tabFor(p)) } }
+                    RingOrder.forEach { p -> RingLegend(p.label, scores.getValue(p), pillarColor(p)) { onOpen(tabFor(p)) } }
                 }
             }
             Text(
@@ -80,21 +87,28 @@ fun TodayScreen(onOpen: (Tab) -> Unit) {
     }
     val nextUp: @Composable () -> Unit = {
         // Next up
-        val next = items.firstOrNull { it.progress < 1f && it.weight > 0 && !it.time.isBefore(now.minusSeconds(3 * 3600)) }
-        if (next != null) {
+        // The next thing coming up; anything earlier and unticked is counted separately.
+        val next = items.firstOrNull { it.progress < 1f && it.weight > 0 && !it.time.isBefore(now) }
+        val overdue = items.count { it.progress < 1f && it.weight > 0 && it.time.isBefore(now) && it.kind != ItemKind.AUTO }
+        if (next != null || overdue > 0) {
             Card {
                 SectionTitle("Next up")
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                if (next != null) Row(verticalAlignment = Alignment.CenterVertically) {
                     Badge(glyphFor(next), pillarColor(next.pillar), 36.dp)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(next.title, color = Night.Text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                         Text(
-                            if (next.time.isAfter(now)) "at ${fmt.format(next.time)} · in ${human(java.time.Duration.between(now, next.time))}"
-                            else "since ${fmt.format(next.time)}",
+                            "at ${fmt.format(next.time)} · in ${human(java.time.Duration.between(now, next.time))}",
                             color = Night.Muted, fontSize = 13.sp,
                         )
                     }
+                }
+                if (overdue > 0) {
+                    Text(
+                        "$overdue earlier item${if (overdue == 1) "" else "s"} still to log",
+                        color = Night.Dawn, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                    )
                 }
             }
         }
@@ -109,6 +123,7 @@ fun TodayScreen(onOpen: (Tab) -> Unit) {
                     NowMarker(fmt.format(now)); nowShown = true
                 }
                 TimelineRow(item, fmt.format(item.time), past = item.time.isBefore(now)) {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     when (item.kind) {
                         ItemKind.TOGGLE, ItemKind.QIYAM -> log.toggle(day, item.id)
                         ItemKind.PRAYER -> {
@@ -140,7 +155,7 @@ fun TodayScreen(onOpen: (Tab) -> Unit) {
             Row(Modifier.fillMaxWidth().height(90.dp), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.Bottom) {
                 for (i in 13 downTo 0) {
                     val d = day.minusDays(i.toLong())
-                    val s = Plan.scoreFor(prefs, log, d, zone)
+                    val s = remember(d, version) { Plan.scoreFor(prefs, log, d, zone) }
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                         Box(
                             Modifier.fillMaxWidth().height((70 * s / 100f).dp.coerceAtLeast(3.dp))
@@ -180,12 +195,21 @@ fun TodayScreen(onOpen: (Tab) -> Unit) {
 
 @Composable
 private fun RingLegend(label: String, score: Int, color: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick), verticalAlignment = Alignment.Bottom) {
+    // The coloured dot carries identity; the numbers stay in text colour so they're always readable.
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 32.dp).clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(10.dp).clip(CircleShape).background(color))
+        Spacer(Modifier.width(8.dp))
         Text(label, color = Night.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-        Text("$score", color = color, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Text("/100", color = color, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 3.dp))
+        Text("$score", color = Night.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text("/100", color = Night.Muted, fontSize = 12.sp)
     }
 }
+
+/** Outermost first. Blue sits between green and red so the rings stay distinct for colour-blind eyes. */
+val RingOrder = listOf(Pillar.DEEN, Pillar.CAREER, Pillar.BODY, Pillar.WEALTH)
 
 fun tabFor(p: Pillar) = when (p) {
     Pillar.DEEN -> Tab.DEEN; Pillar.BODY -> Tab.BODY; Pillar.CAREER -> Tab.CAREER; Pillar.WEALTH -> Tab.WEALTH
@@ -231,7 +255,8 @@ private fun TimelineRow(item: TodayItem, time: String, past: Boolean, onTap: () 
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(time, color = Night.Muted, fontSize = 13.sp, modifier = Modifier.width(46.dp))
+        val overdue = past && !done && item.weight > 0 && item.kind != ItemKind.AUTO
+        Text(time, color = if (overdue) Night.Dawn else Night.Muted, fontSize = 13.sp, modifier = Modifier.width(46.dp))
         Badge(glyphFor(item), pillarColor(item.pillar), 28.dp)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -49,7 +50,7 @@ fun DeenScreen(onOpenQiyam: () -> Unit) {
     val prefs = remember { Prefs(ctx) }
     val log = remember { DayLog(ctx) }
     val zone = prefs.zone
-    val now = rememberNow()
+    val now = rememberMinute()
     val day = now.atZone(zone).toLocalDate()
     val times = NightCalculator.prayers(prefs.lat, prefs.lng, prefs.method, day, zone)
     val fmt = DateTimeFormatter.ofPattern("HH:mm").withZone(zone)
@@ -195,7 +196,7 @@ fun StatusChip(
     modifier: Modifier = Modifier, compact: Boolean = false, onClick: () -> Unit,
 ) {
     Box(
-        modifier.clip(RoundedCornerShape(50))
+        modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(50))
             .background(if (on) color else Night.Fill.copy(alpha = if (enabled) Night.Fill.alpha else Night.Fill.alpha / 2))
             .selectable(selected = on, enabled = enabled, role = Role.Checkbox, onClick = onClick)
             .padding(horizontal = if (compact) 2.dp else 8.dp, vertical = 7.dp),

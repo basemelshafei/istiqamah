@@ -1,5 +1,7 @@
 package com.basem.qiyam
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,6 +31,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -60,6 +65,14 @@ fun Page(title: String, subtitle: String? = null, overline: String? = null, cont
     }
 }
 
+/** The current moment, refreshed every 30 seconds: enough for times and countdowns in minutes. */
+@Composable
+fun rememberMinute(): Instant {
+    var now by remember { mutableStateOf(Instant.now()) }
+    LaunchedEffect(Unit) { while (Motion.live) { delay(30_000); now = Instant.now() } }
+    return now
+}
+
 /** The current moment, ticking every second while motion is on. */
 @Composable
 fun rememberNow(): Instant {
@@ -78,12 +91,19 @@ data class RingValue(val progress: Float, val color: Color)
 @Composable
 fun ActivityRings(
     rings: List<RingValue>, size: Dp, stroke: Dp = 14.dp, gap: Dp = 3.dp,
+    description: String? = null,
     center: (@Composable () -> Unit)? = null,
 ) {
-    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+    // Rings fill smoothly when values change, like Apple's.
+    val animated = rings.map { r ->
+        val p by animateFloatAsState(r.progress, tween(if (Motion.live) 700 else 0), label = "ring")
+        r.copy(progress = p)
+    }
+    val semantics = if (description != null) Modifier.clearAndSetSemantics { contentDescription = description } else Modifier
+    Box(Modifier.size(size).then(semantics), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(size)) {
             val sw = stroke.toPx(); val g = gap.toPx()
-            rings.forEachIndexed { i, r ->
+            animated.forEachIndexed { i, r ->
                 val inset = sw / 2 + i * (sw + g)
                 val tl = Offset(inset, inset)
                 val box = Size(this.size.width - 2 * inset, this.size.height - 2 * inset)
@@ -117,8 +137,8 @@ fun scoreColor(score: Int): Color = when {
 
 /** A small line chart of values over time. */
 @Composable
-fun Sparkline(values: List<Float>, modifier: Modifier = Modifier, color: Color = Night.Gold) {
-    Canvas(modifier) {
+fun Sparkline(values: List<Float>, modifier: Modifier = Modifier, color: Color = Night.Gold, description: String? = null) {
+    Canvas(if (description != null) modifier.semantics { contentDescription = description } else modifier) {
         if (values.size < 2) return@Canvas
         val min = values.min(); val max = values.max()
         val span = (max - min).takeIf { it > 0f } ?: 1f

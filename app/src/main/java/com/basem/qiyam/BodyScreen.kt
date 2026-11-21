@@ -46,6 +46,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.basem.qiyam.ui.Night
@@ -61,7 +63,7 @@ fun BodyScreen() {
     val prefs = remember { Prefs(ctx) }
     val log = remember { DayLog(ctx) }
     val zone = prefs.zone
-    val day = rememberNow().atZone(zone).toLocalDate()
+    val day = rememberMinute().atZone(zone).toLocalDate()
     val monday = day.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
     val week = (0L..6L).map { monday.plusDays(it) }
     val planned = prefs.gymDays
@@ -181,7 +183,10 @@ fun BodyScreen() {
                         )
                     }
                 }
-                Sparkline(history.map { it.second }, Modifier.width(140.dp).height(48.dp), color = Rings.Body)
+                Sparkline(
+                    history.map { it.second }, Modifier.width(140.dp).height(48.dp), color = Rings.Body,
+                    description = "Bodyweight trend over ${history.size} entries",
+                )
             }
             OutlinedTextField(
                 value = input, onValueChange = { input = it.replace(',', '.') },
@@ -240,12 +245,25 @@ private fun WeeklyVolume(workouts: List<LyftaWorkout>, today: java.time.LocalDat
         "This week: ${String.format(Locale.US, "%,.0f", vols.last())} $unit lifted",
         color = Night.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
     )
-    Row(Modifier.fillMaxWidth().height(70.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
+    Row(
+        Modifier.fillMaxWidth().height(86.dp).semantics {
+            contentDescription = "Weekly volume, last 8 weeks: " + vols.joinToString(", ") { String.format(Locale.US, "%,.0f", it) } + " $unit"
+        },
+        horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.Bottom,
+    ) {
         vols.forEachIndexed { i, v ->
-            Box(
-                Modifier.weight(1f).height((64 * (v / max)).toFloat().dp.coerceAtLeast(3.dp))
-                    .clip(RoundedCornerShape(4.dp)).background(if (i == vols.lastIndex) Rings.Body else Rings.Body.copy(alpha = 0.35f)),
-            )
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    Modifier.fillMaxWidth(0.82f).height((62 * (v / max)).toFloat().dp.coerceAtLeast(3.dp))
+                        .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                        .background(if (i == vols.lastIndex) Rings.Body else Rings.Body.copy(alpha = 0.35f)),
+                )
+                // Week-start labels on every other bar keep it readable.
+                Text(
+                    if (i % 2 == 1 || i == vols.lastIndex) weeks[i].format(DateTimeFormatter.ofPattern("d MMM")) else "",
+                    color = if (i == vols.lastIndex) Night.Text else Night.Muted, fontSize = 10.sp, maxLines = 1,
+                )
+            }
         }
     }
 }
@@ -335,7 +353,7 @@ private fun ConnectedApps(prefs: Prefs) {
             }
             TextButton(onClick = {
                 when (status) {
-                    Health.Status.NEEDS_PERMISSION -> askHealth.launch(Health.permissions)
+                    Health.Status.NEEDS_PERMISSION -> askHealth.launch(Health.request)
                     Health.Status.NOT_INSTALLED -> runCatching {
                         ctx.startActivity(
                             Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.google.android.apps.healthdata"))
@@ -349,6 +367,11 @@ private fun ConnectedApps(prefs: Prefs) {
                     when (status) { Health.Status.NEEDS_PERMISSION -> "Connect"; Health.Status.NOT_INSTALLED -> "Install"; else -> "Sync" },
                     color = Night.Gold, fontSize = 16.sp,
                 )
+            }
+        }
+        if (status == Health.Status.CONNECTED) {
+            TextButton(onClick = { scope.launch { Health.disconnect(ctx); refresh++ } }, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
+                Text("Disconnect", color = Night.Dawn, fontSize = 14.sp)
             }
         }
         if (status != Health.Status.CONNECTED) {
@@ -380,6 +403,11 @@ private fun ConnectedApps(prefs: Prefs) {
                         busy = false
                     }
                 }) { Text("Sync", color = Night.Gold, fontSize = 16.sp) }
+            }
+        }
+        if (prefs.lyftaKey.isNotBlank()) {
+            TextButton(onClick = { prefs.lyftaKey = ""; Lyfta.clear(ctx) }, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
+                Text("Disconnect and delete key", color = Night.Dawn, fontSize = 14.sp)
             }
         }
         if (prefs.lyftaKey.isBlank()) {
