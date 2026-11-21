@@ -89,7 +89,8 @@ private fun PortfolioCard(platforms: List<Platform>, prefs: Prefs) {
     Card {
         SectionTitle("Portfolio")
         if (platforms.isEmpty() && manual.isEmpty()) {
-            Text("Connect eToro or Trading 212 below, or log trades by hand.", color = Night.Muted, fontSize = 14.sp)
+            val problem = listOf(prefs.getStr("t212Status"), prefs.getStr("etoroStatus")).firstOrNull { it.isNotBlank() && !it.startsWith("Synced") }
+            Text(problem ?: "Connect eToro or Trading 212 below, or log trades by hand.", color = if (problem != null) Night.Warn else Night.Muted, fontSize = 14.sp)
         }
         platforms.forEach { pl ->
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -292,9 +293,17 @@ private fun AccountsCard(prefs: Prefs) {
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text("Trading 212", color = Night.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                Text(if (prefs.getStr("t212Key").isBlank()) "Invest or Stocks ISA account" else "Connected", color = Night.Muted, fontSize = 13.sp)
+                Text(
+                    if (prefs.getStr("t212Key").isBlank()) "Invest or Stocks ISA account" else prefs.getStr("t212Status", "Key saved, not synced yet"),
+                    color = statusColor(prefs.getStr("t212Status")), fontSize = 13.sp,
+                )
             }
             if (prefs.getStr("t212Key").isNotBlank()) TextButton(onClick = { sync(Wealth::syncTrading212) }) { Text("Sync", color = Night.Gold) }
+        }
+        if (prefs.getStr("t212Key").isNotBlank()) {
+            TextButton(onClick = { Wealth.disconnect(prefs, "t212") }, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
+                Text("Disconnect and delete key", color = Night.Dawn, fontSize = 14.sp)
+            }
         }
         if (prefs.getStr("t212Key").isBlank()) {
             Text("In Trading 212: Settings › API › Generate key, with Portfolio permission. Paste the key and secret.", color = Night.Muted, fontSize = 13.sp)
@@ -314,9 +323,17 @@ private fun AccountsCard(prefs: Prefs) {
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text("eToro", color = Night.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                Text(if (prefs.getStr("etoroUserKey").isBlank()) "Real account, read only" else "Connected", color = Night.Muted, fontSize = 13.sp)
+                Text(
+                    if (prefs.getStr("etoroUserKey").isBlank()) "Real account, read only" else prefs.getStr("etoroStatus", "Keys saved, not synced yet"),
+                    color = statusColor(prefs.getStr("etoroStatus")), fontSize = 13.sp,
+                )
             }
             if (prefs.getStr("etoroUserKey").isNotBlank()) TextButton(onClick = { sync(Wealth::syncEtoro) }) { Text("Sync", color = Night.Gold) }
+        }
+        if (prefs.getStr("etoroUserKey").isNotBlank()) {
+            TextButton(onClick = { Wealth.disconnect(prefs, "etoro") }, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
+                Text("Disconnect and delete keys", color = Night.Dawn, fontSize = 14.sp)
+            }
         }
         if (prefs.getStr("etoroUserKey").isBlank()) {
             Text("eToro needs two keys: a Public API key and a User key (Settings › Trading › API). Give it read access only.", color = Night.Muted, fontSize = 13.sp)
@@ -332,6 +349,13 @@ private fun AccountsCard(prefs: Prefs) {
         }
         status?.let { Text(it, color = Night.Muted, fontSize = 13.sp) }
     }
+}
+
+@Composable
+private fun statusColor(status: String) = when {
+    status.startsWith("Synced") -> Night.Good
+    status.isBlank() -> Night.Muted
+    else -> Night.Warn
 }
 
 @Composable

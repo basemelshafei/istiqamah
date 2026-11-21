@@ -36,6 +36,15 @@ object Wealth {
         runCatching { fromJson(JSONObject(p.getStr("plat_$id").ifBlank { return@mapNotNull null })) }.getOrNull()
     }
 
+    /** Deletes a broker's keys and its stored portfolio from the phone. */
+    fun disconnect(p: Prefs, id: String) {
+        when (id) {
+            "t212" -> { p.putStr("t212Key", ""); p.putStr("t212Secret", ""); p.putStr("t212Status", "") }
+            "etoro" -> { p.putStr("etoroApiKey", ""); p.putStr("etoroUserKey", ""); p.putStr("etoroStatus", "") }
+        }
+        p.putStr("plat_$id", "")
+    }
+
     internal fun save(p: Prefs, pl: Platform) = p.putStr("plat_${pl.id}", toJson(pl).toString())
 
     private fun toJson(pl: Platform) = JSONObject().put("id", pl.id).put("name", pl.name).put("ccy", pl.currency).put("at", pl.syncedAt)
@@ -54,33 +63,57 @@ object Wealth {
 
     fun syncTrading212(ctx: Context): String {
         val p = Prefs(ctx)
+        val msg = runCatching { fetchTrading212(p) }.getOrElse { "Couldn't read Trading 212's reply: ${it.message?.take(120)}" }
+        p.putStr("t212Status", msg)
+        return msg
+    }
+
+    private fun fetchTrading212(p: Prefs): String {
         val key = p.getStr("t212Key"); val secret = p.getStr("t212Secret")
         if (key.isBlank()) return "Add your Trading 212 API key"
-        val auth = if (secret.isNotBlank()) "Basic " + Base64.encodeToString("$key:$secret".toByteArray(), Base64.NO_WRAP) else key
         val base = "https://live.trading212.com/api/v0/equity"
-        var (code, body) = Net.get("$base/positions", mapOf("Authorization" to auth))
-        val holdings: List<Holding>
-        var currency = "GBP"
-        if (code in 200..299) {
-            val r = parseTrading212Positions(body); holdings = r.first; currency = r.second ?: currency
-        } else if (code == 404) {
-            val r2 = Net.get("$base/portfolio", mapOf("Authorization" to auth)); code = r2.first; body = r2.second
-            if (code !in 200..299) return t212Error(code)
-            holdings = parseTrading212Portfolio(body)
-        } else return t212Error(code)
-        save(p, Platform("t212", "Trading 212", currency, holdings, System.currentTimeMillis()))
-        return "Trading 212: ${holdings.size} position${if (holdings.size == 1) "" else "s"}"
+        // New keys sign in with key + secret (Basic auth); older keys send the key on its own.
+        val auths = buildList {
+            if (secret.isNotBlank()) add("Basic " + Base64.encodeToString("$key:$secret".toByteArray(), Base64.NO_WRAP))
+            add(key)
+        }
+        var last = 0 to ""
+        for (auth in auths) {
+            for (path in listOf("positions", "portfolio")) {
+                val r = Net.get("$base/$path", mapOf("Authorization" to auth))
+                last = r
+                if (r.first in 200..299) {
+                    val (holdings, ccy) = if (path == "positions") parseTrading212Positions(r.second)
+                    else parseTrading212Portfolio(r.second) to null
+                    save(p, Platform("t212", "Trading 212", ccy ?: "GBP", holdings, System.currentTimeMillis()))
+                    return if (holdings.isEmpty()) "Connected, but Trading 212 returned no open positions. Is this key for the account you invest in (Invest or ISA)?"
+                    else "Synced ${holdings.size} position${if (holdings.size == 1) "" else "s"}"
+                }
+                if (r.first == 401) break // wrong sign-in style: try the next one
+                if (r.first == 429) { Thread.sleep(1500) }
+            }
+        }
+        return t212Error(last.first) + detail(last.second)
+    }
+
+    /** A short piece of the server's own error text, so problems are diagnosable from the screen. */
+    private fun detail(body: String): String {
+        val text = runCatching { org.json.JSONObject(body).let { it.optString("message").ifBlank { it.optString("code") }.ifBlank { it.toString() } } }
+            .getOrDefault(body).replace("\n", " ").trim().take(140)
+        return if (text.isBlank()) "" else " ($text)"
     }
 
     private fun t212Error(code: Int) = when (code) {
-        401, 403 -> "Trading 212 didn't accept the key. Check it has Portfolio permission."
+        0 -> "Couldn't reach Trading 212. Check your internet connection."
+        401 -> "Trading 212 didn't accept the key and secret. Paste them again, without spaces."
+        403 -> "The key works but lacks permission. Recreate it with Portfolio (and Account data) ticked."
         429 -> "Trading 212 asks to slow down. Try again in a minute."
-        else -> "Trading 212 returned an error ($code)"
+        else -> "Trading 212 returned error $code"
     }
 
     /** /equity/positions: values are in your account currency under walletImpact. */
     fun parseTrading212Positions(json: String): Pair<List<Holding>, String?> {
-        val arr = JSONArray(json)
+        val arr = asArray(json, "items", "positions")
         var ccy: String? = null
         val list = (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
@@ -101,7 +134,7 @@ object Wealth {
 
     /** Older /equity/portfolio shape: prices in the instrument's currency. */
     fun parseTrading212Portfolio(json: String): List<Holding> {
-        val arr = JSONArray(json)
+        val arr = asArray(json, "items", "positions")
         return (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
             val q = o.optDouble("quantity", 0.0)
@@ -109,16 +142,31 @@ object Wealth {
         }
     }
 
+    private fun asArray(json: String, vararg keys: String): JSONArray {
+        val t = json.trim()
+        if (t.startsWith("[")) return JSONArray(t)
+        val o = JSONObject(t)
+        keys.forEach { k -> o.optJSONArray(k)?.let { return it } }
+        throw IllegalStateException("unexpected reply: ${t.take(80)}")
+    }
+
     // --- eToro (Public API key + User key) --------------------------------------------------------
 
     fun syncEtoro(ctx: Context): String {
         val p = Prefs(ctx)
+        val msg = runCatching { fetchEtoro(p) }.getOrElse { "Couldn't read eToro's reply: ${it.message?.take(120)}" }
+        p.putStr("etoroStatus", msg)
+        return msg
+    }
+
+    private fun fetchEtoro(p: Prefs): String {
         val apiKey = p.getStr("etoroApiKey"); val userKey = p.getStr("etoroUserKey")
         if (apiKey.isBlank() || userKey.isBlank()) return "Add both eToro keys"
         fun headers() = mapOf("x-api-key" to apiKey, "x-user-key" to userKey, "x-request-id" to UUID.randomUUID().toString())
         val (code, body) = Net.get("https://public-api.etoro.com/api/v1/trading/info/real/pnl", headers())
-        if (code == 401 || code == 403) return "eToro didn't accept the keys"
-        if (code !in 200..299) return "eToro returned an error ($code)"
+        if (code == 0) return "Couldn't reach eToro. Check your internet connection."
+        if (code == 401 || code == 403) return "eToro didn't accept the keys" + detail(body)
+        if (code !in 200..299) return "eToro returned error $code" + detail(body)
         val positions = parseEtoro(body)
         // Turn instrument IDs into names.
         val names = mutableMapOf<Int, Pair<String, String>>()
@@ -132,7 +180,7 @@ object Wealth {
             Holding(sym, name, ps.sumOf { it.second.quantity }, ps.sumOf { it.second.cost }, ps.sumOf { it.second.value })
         }
         save(p, Platform("etoro", "eToro", "USD", holdings, System.currentTimeMillis()))
-        return "eToro: ${holdings.size} position${if (holdings.size == 1) "" else "s"}"
+        return if (holdings.isEmpty()) "Connected, but eToro returned no open positions" else "Synced ${holdings.size} position${if (holdings.size == 1) "" else "s"}"
     }
 
     /** Positions (including copy-trading) as (instrumentId, holding with USD cost/value). */

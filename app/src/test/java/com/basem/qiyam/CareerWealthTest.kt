@@ -94,4 +94,18 @@ class CareerWealthTest {
         DayLog(ctx).setValue(sunday, "gh", 3)
         assertEquals(1f, Plan.items(prefs, DayLog(ctx), sunday, zone).first { it.id == "code" }.progress)
     }
+
+    @Test fun trading212AcceptsAWrappedList() {
+        val (h, _) = Wealth.parseTrading212Positions("""{"items":[{"quantity":1,"instrument":{"ticker":"VUAG_EQ"},"walletImpact":{"currency":"GBP","currentValue":10.0,"totalCost":9.0}}]}""")
+        assertEquals(1, h.size)
+    }
+
+    @Test fun syncProblemsAreKeptForTheScreen() {
+        prefs.putStr("t212Key", "abc"); prefs.putStr("t212Secret", "def")
+        val msg = Wealth.syncTrading212(ctx) // no network on the test phone
+        assertEquals(msg, prefs.getStr("t212Status"))
+        assertTrue(msg.startsWith("Couldn't reach"))
+        Wealth.disconnect(prefs, "t212")
+        assertEquals("", prefs.getStr("t212Key"))
+    }
 }
