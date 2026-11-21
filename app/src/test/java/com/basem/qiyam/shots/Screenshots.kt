@@ -81,10 +81,23 @@ object Shots {
         for (i in 1L..6L) com.basem.qiyam.Career.addStudy(log, today.minusDays(i), 30 + (i * 10 % 30).toInt())
         com.basem.qiyam.Career.addStudy(log, today, 30)
         // Wealth
-        com.basem.qiyam.Wealth.save(prefs, com.basem.qiyam.Platform("t212", "Trading 212", "GBP", listOf(
-            com.basem.qiyam.Holding("VUAG", "Vanguard S&P 500", 40.0, 3420.0, 3812.4),
-            com.basem.qiyam.Holding("NVDA", "NVIDIA", 6.0, 610.0, 702.3),
-            com.basem.qiyam.Holding("MSFT", "Microsoft", 3.0, 905.0, 951.6)), System.currentTimeMillis()))
+        run {
+            val hist = org.json.JSONObject()
+            for (i in 40L downTo 1L) hist.put(today.minusDays(i).toString(), 6900.0 + i * -9.5 + (i % 5) * 40)
+            prefs.putStr("hist_t212", hist.toString())
+        }
+        val syms = listOf("AAPL" to "Apple", "MSFT" to "Microsoft", "NVDA" to "NVIDIA", "AMZN" to "Amazon", "GOOGL" to "Alphabet", "META" to "Meta",
+            "TSLA" to "Tesla", "ASML" to "ASML", "VUAG" to "Vanguard S&P 500", "AMD" to "AMD", "AVGO" to "Broadcom", "ORCL" to "Oracle",
+            "CRM" to "Salesforce", "SHEL" to "Shell", "AZN" to "AstraZeneca", "ULVR" to "Unilever", "PLTR" to "Palantir", "NFLX" to "Netflix")
+        val holdings = syms.mapIndexed { i, (sym, name) ->
+            val cost = 120.0 + (i * 53) % 400
+            com.basem.qiyam.Holding(sym, name, 1.0 + i, cost, cost * (0.82 + ((i * 37) % 50) / 100.0))
+        }
+        com.basem.qiyam.Wealth.save(prefs, com.basem.qiyam.Platform("t212", "Trading 212", "GBP", holdings, System.currentTimeMillis(),
+            cash = 142.18, pies = listOf(
+                com.basem.qiyam.Pie(1, "Big Tech", 3120.4, 2780.0),
+                com.basem.qiyam.Pie(2, "Global Dividends", 1544.9, 1500.0),
+                com.basem.qiyam.Pie(3, "AI & Semis", 1080.2, 1150.0))))
         com.basem.qiyam.Wealth.save(prefs, com.basem.qiyam.Platform("etoro", "eToro", "USD", listOf(
             com.basem.qiyam.Holding("AMZN", "Amazon", 5.0, 900.0, 1012.0),
             com.basem.qiyam.Holding("BTC", "Bitcoin", 0.01, 950.0, 880.0)), System.currentTimeMillis()))

@@ -92,22 +92,9 @@ private fun PortfolioCard(platforms: List<Platform>, prefs: Prefs) {
             val problem = listOf(prefs.getStr("t212Status"), prefs.getStr("etoroStatus")).firstOrNull { it.isNotBlank() && !it.startsWith("Synced") }
             Text(problem ?: "Connect eToro or Trading 212 below, or log trades by hand.", color = if (problem != null) Night.Warn else Night.Muted, fontSize = 14.sp)
         }
-        platforms.forEach { pl ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Badge(G.CHART, if (pl.id == "etoro") Color(0xFF13C636) else Color(0xFF0E7EE8), 34.dp)
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(pl.name, color = Night.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                    Text("${pl.holdings.size} positions · invested ${money(pl.cost, pl.currency)}", color = Night.Muted, fontSize = 13.sp)
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(money(pl.value, pl.currency), color = Night.Text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                    Text(
-                        signed(pl.pnl, pl.currency) + String.format(Locale.US, " (%+.1f%%)", if (pl.cost > 0) pl.pnl / pl.cost * 100 else 0.0),
-                        color = if (pl.pnl >= 0) Night.Good else Night.Dawn, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
+        platforms.forEachIndexed { i, pl ->
+            if (i > 0) HorizontalDivider(color = Night.CardEdge, thickness = 0.5.dp)
+            PlatformSection(pl, prefs)
         }
         if (manual.isNotEmpty()) {
             val byCcy = manual.groupBy { it.currency }
@@ -123,23 +110,119 @@ private fun PortfolioCard(platforms: List<Platform>, prefs: Prefs) {
                 }
             }
         }
-        val top = platforms.flatMap { pl -> pl.holdings.map { it to pl.currency } }.sortedByDescending { it.first.value }.take(8)
+    }
+}
+
+@Composable
+private fun PlatformSection(pl: Platform, prefs: Prefs) {
+    val ccy = pl.currency
+    val total = pl.value + (pl.cash ?: 0.0)
+    var showAll by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Headline
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Badge(G.CHART, if (pl.id == "etoro") Color(0xFF13C636) else Color(0xFF0E7EE8), 30.dp)
+            Spacer(Modifier.width(10.dp))
+            Text(pl.name, color = Night.Text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Text("${pl.holdings.size} positions", color = Night.Muted, fontSize = 13.sp)
+        }
+        Text(money(total, ccy), color = Night.Text, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+        Text(
+            signed(pl.pnl, ccy) + String.format(Locale.US, " (%+.1f%%)", if (pl.cost > 0) pl.pnl / pl.cost * 100 else 0.0) + " all time",
+            color = if (pl.pnl >= 0) Night.Good else Night.Dawn, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+        )
+        Row {
+            LabelValue("Invested", money(pl.cost, ccy), Night.Text)
+            Spacer(Modifier.width(24.dp))
+            pl.cash?.let { LabelValue("Cash", money(it, ccy), Night.Text) }
+        }
+
+        // Value over time (recorded from the day you connected)
+        val hist = Wealth.history(prefs, pl.id)
+        if (hist.size >= 2) {
+            Sparkline(hist.map { it.second.toFloat() }, Modifier.fillMaxWidth().height(56.dp), color = if (hist.last().second >= hist.first().second) Night.Good else Night.Dawn)
+            Text("Since ${hist.first().first.format(DateTimeFormatter.ofPattern("d MMM"))}", color = Night.Muted, fontSize = 12.sp)
+        } else {
+            Text("Value-over-time chart fills in as you open the app over the coming days.", color = Night.Muted, fontSize = 12.sp)
+        }
+
+        // Pies
+        if (pl.pies.isNotEmpty()) {
+            Text("Pies", color = Night.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            val inPies = pl.pies.sumOf { it.value }
+            pl.pies.forEach { pie -> ShareRow(pie.name, pie.value, pie.pnlPct, pie.value / pl.value.coerceAtLeast(0.01), ccy) }
+            val outside = pl.value - inPies
+            if (outside > pl.value * 0.005) {
+                val cost = (pl.cost - pl.pies.sumOf { it.invested }).coerceAtLeast(0.0)
+                ShareRow("Outside pies", outside, if (cost > 0) (outside - cost) / cost * 100 else 0.0, outside / pl.value, ccy)
+            }
+        }
+
+        // Concentration across everything (pies included)
+        val top = pl.holdings.sortedByDescending { it.value }.take(5)
         if (top.isNotEmpty()) {
-            HorizontalDivider(color = Night.CardEdge, thickness = 0.5.dp)
-            Text("Largest holdings", color = Night.Muted, fontSize = 13.sp)
-            top.forEach { (h, ccy) ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(h.symbol, color = Night.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                        if (h.name.isNotBlank()) Text(h.name, color = Night.Muted, fontSize = 12.sp, maxLines = 1)
-                    }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(money(h.value, ccy), color = Night.Text, fontSize = 15.sp)
-                        Text(String.format(Locale.US, "%+.1f%%", h.pnlPct), color = if (h.pnl >= 0) Night.Good else Night.Dawn, fontSize = 12.sp)
-                    }
+            Text("Biggest exposures", color = Night.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            top.forEach { h -> ShareRow(h.symbol, h.value, h.pnlPct, h.value / pl.value.coerceAtLeast(0.01), ccy, h.name) }
+        }
+
+        // Best and worst
+        val ranked = pl.holdings.filter { it.cost > 1.0 }.sortedByDescending { it.pnlPct }
+        if (ranked.size >= 4) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Best", color = Night.Muted, fontSize = 13.sp)
+                    ranked.take(3).forEach { Mover(it) }
+                }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Worst", color = Night.Muted, fontSize = 13.sp)
+                    ranked.takeLast(3).reversed().forEach { Mover(it) }
                 }
             }
         }
+
+        // Everything, on request
+        TextButton(onClick = { showAll = !showAll }, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
+            Text(if (showAll) "Hide positions" else "Show all ${pl.holdings.size} positions", color = Night.Gold, fontSize = 15.sp)
+        }
+        if (showAll) {
+            pl.holdings.sortedByDescending { it.value }.forEach { h ->
+                Row {
+                    Text(h.symbol, color = Night.Text, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                    Text(money(h.value, ccy), color = Night.Text, fontSize = 14.sp)
+                    Text(String.format(Locale.US, "  %+.1f%%", h.pnlPct), color = if (h.pnl >= 0) Night.Good else Night.Dawn, fontSize = 13.sp, modifier = Modifier.width(64.dp))
+                }
+            }
+        }
+    }
+}
+
+/** Name, value, return, and a bar showing its share of the portfolio. */
+@Composable
+private fun ShareRow(label: String, value: Double, pct: Double, share: Double, ccy: String, sub: String = "") {
+    Column {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Column(Modifier.weight(1f)) {
+                Text(label, color = Night.Text, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                if (sub.isNotBlank()) Text(sub, color = Night.Muted, fontSize = 12.sp, maxLines = 1)
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(money(value, ccy), color = Night.Text, fontSize = 15.sp)
+                Text(
+                    String.format(Locale.US, "%.0f%% of portfolio · %+.1f%%", share * 100, pct),
+                    color = if (pct >= 0) Night.Good else Night.Dawn, fontSize = 12.sp,
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Bar(share.toFloat(), Gold)
+    }
+}
+
+@Composable
+private fun Mover(h: Holding) {
+    Row {
+        Text(h.symbol, color = Night.Text, fontSize = 14.sp, modifier = Modifier.weight(1f), maxLines = 1)
+        Text(String.format(Locale.US, "%+.1f%%", h.pnlPct), color = if (h.pnl >= 0) Night.Good else Night.Dawn, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 

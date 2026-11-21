@@ -108,4 +108,19 @@ class CareerWealthTest {
         Wealth.disconnect(prefs, "t212")
         assertEquals("", prefs.getStr("t212Key"))
     }
+
+    @Test fun trading212PiesUseResultValues() {
+        val pies = Wealth.parseTrading212Pies("""[{"id":11,"cash":1.2,"progress":0.5,"status":null,
+            "result":{"priceAvgInvestedValue":1000.0,"priceAvgValue":1100.0,"priceAvgResult":100.0,"priceAvgResultCoef":0.1}}]""")
+        assertEquals(11L, pies[0].id)
+        assertEquals(10.0, pies[0].pnlPct, 0.001)
+    }
+
+    @Test fun valueHistoryIsOnePointPerDay() {
+        val pl = Platform("t212", "Trading 212", "GBP", listOf(Holding("A", "", 1.0, 10.0, 12.0)), 0L, cash = 3.0)
+        Wealth.save(prefs, pl); Wealth.save(prefs, pl)
+        val h = Wealth.history(prefs, "t212")
+        assertEquals(1, h.size)
+        assertEquals(15.0, h[0].second, 0.001)
+    }
 }

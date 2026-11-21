@@ -14,7 +14,16 @@ data class Holding(val symbol: String, val name: String, val quantity: Double, v
     val pnlPct get() = if (cost > 0) pnl / cost * 100 else 0.0
 }
 
-data class Platform(val id: String, val name: String, val currency: String, val holdings: List<Holding>, val syncedAt: Long) {
+/** A Trading 212 pie: value and what you've put in, in the account currency. */
+data class Pie(val id: Long, val name: String, val value: Double, val invested: Double) {
+    val pnl get() = value - invested
+    val pnlPct get() = if (invested > 0) pnl / invested * 100 else 0.0
+}
+
+data class Platform(
+    val id: String, val name: String, val currency: String, val holdings: List<Holding>, val syncedAt: Long,
+    val cash: Double? = null, val pies: List<Pie> = emptyList(),
+) {
     val value get() = holdings.sumOf { it.value }
     val cost get() = holdings.sumOf { it.cost }
     val pnl get() = value - cost
@@ -45,10 +54,26 @@ object Wealth {
         p.putStr("plat_$id", "")
     }
 
-    internal fun save(p: Prefs, pl: Platform) = p.putStr("plat_${pl.id}", toJson(pl).toString())
+    internal fun save(p: Prefs, pl: Platform) {
+        p.putStr("plat_${pl.id}", toJson(pl).toString())
+        // One value per day, for the value-over-time chart.
+        val hist = runCatching { JSONObject(p.getStr("hist_${pl.id}", "{}")) }.getOrDefault(JSONObject())
+        hist.put(LocalDate.now().toString(), pl.value + (pl.cash ?: 0.0))
+        val keys = hist.keys().asSequence().sorted().toList()
+        keys.dropLast(400).forEach { hist.remove(it) }
+        p.putStr("hist_${pl.id}", hist.toString())
+    }
+
+    /** Account value by day (oldest first), recorded each time the app syncs. */
+    fun history(p: Prefs, id: String): List<Pair<LocalDate, Double>> = runCatching {
+        val o = JSONObject(p.getStr("hist_$id", "{}"))
+        o.keys().asSequence().map { LocalDate.parse(it) to o.getDouble(it) }.sortedBy { it.first }.toList()
+    }.getOrDefault(emptyList())
 
     private fun toJson(pl: Platform) = JSONObject().put("id", pl.id).put("name", pl.name).put("ccy", pl.currency).put("at", pl.syncedAt)
+        .put("cash", pl.cash ?: JSONObject.NULL)
         .put("h", JSONArray().apply { pl.holdings.forEach { put(JSONObject().put("s", it.symbol).put("n", it.name).put("q", it.quantity).put("c", it.cost).put("v", it.value)) } })
+        .put("pies", JSONArray().apply { pl.pies.forEach { put(JSONObject().put("id", it.id).put("n", it.name).put("v", it.value).put("i", it.invested)) } })
 
     private fun fromJson(o: JSONObject): Platform {
         val h = o.getJSONArray("h")
@@ -56,6 +81,8 @@ object Wealth {
             o.getString("id"), o.getString("name"), o.getString("ccy"),
             (0 until h.length()).map { i -> h.getJSONObject(i).let { Holding(it.getString("s"), it.optString("n"), it.getDouble("q"), it.getDouble("c"), it.getDouble("v")) } },
             o.optLong("at"),
+            cash = if (o.isNull("cash")) null else o.optDouble("cash"),
+            pies = o.optJSONArray("pies")?.let { a -> (0 until a.length()).map { i -> a.getJSONObject(i).let { Pie(it.getLong("id"), it.optString("n"), it.getDouble("v"), it.getDouble("i")) } } } ?: emptyList(),
         )
     }
 
@@ -85,7 +112,9 @@ object Wealth {
                 if (r.first in 200..299) {
                     val (holdings, ccy) = if (path == "positions") parseTrading212Positions(r.second)
                     else parseTrading212Portfolio(r.second) to null
-                    save(p, Platform("t212", "Trading 212", ccy ?: "GBP", holdings, System.currentTimeMillis()))
+                    val cash = runCatching { trading212Cash(base, auth) }.getOrNull()
+                    val pies = runCatching { trading212Pies(p, base, auth) }.getOrDefault(emptyList())
+                    save(p, Platform("t212", "Trading 212", ccy ?: "GBP", holdings, System.currentTimeMillis(), cash, pies))
                     return if (holdings.isEmpty()) "Connected, but Trading 212 returned no open positions. Is this key for the account you invest in (Invest or ISA)?"
                     else "Synced ${holdings.size} position${if (holdings.size == 1) "" else "s"}"
                 }
@@ -94,6 +123,45 @@ object Wealth {
             }
         }
         return t212Error(last.first) + detail(last.second)
+    }
+
+    /** Free cash in the account, if Trading 212 shares it. */
+    private fun trading212Cash(base: String, auth: String): Double? {
+        Thread.sleep(1100)
+        val (c, b) = Net.get("$base/account/cash", mapOf("Authorization" to auth))
+        if (c !in 200..299) return null
+        val o = JSONObject(b)
+        return if (o.has("free")) o.optDouble("free") else null
+    }
+
+    /** Your pies with value and invested amounts. Names are fetched once and remembered. */
+    private fun trading212Pies(p: Prefs, base: String, auth: String): List<Pie> {
+        Thread.sleep(1100)
+        val (c, b) = Net.get("$base/pies", mapOf("Authorization" to auth))
+        if (c !in 200..299) return emptyList()
+        return parseTrading212Pies(b).map { pie ->
+            var name = p.getStr("pieName_${pie.id}")
+            if (name.isBlank()) {
+                Thread.sleep(5100) // Trading 212 allows one pie lookup every 5 seconds
+                val (c2, b2) = Net.get("$base/pies/${pie.id}", mapOf("Authorization" to auth))
+                if (c2 in 200..299) name = runCatching { JSONObject(b2).getJSONObject("settings").optString("name") }.getOrDefault("")
+                if (name.isNotBlank()) p.putStr("pieName_${pie.id}", name)
+            }
+            pie.copy(name = name.ifBlank { "Pie ${pie.id}" })
+        }
+    }
+
+    fun parseTrading212Pies(json: String): List<Pie> {
+        val arr = asArray(json, "items", "pies")
+        return (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            val r = o.optJSONObject("result")
+            Pie(
+                id = o.optLong("id"), name = "",
+                value = r?.optDouble("priceAvgValue", 0.0) ?: 0.0,
+                invested = r?.optDouble("priceAvgInvestedValue", 0.0) ?: 0.0,
+            )
+        }.sortedByDescending { it.value }
     }
 
     /** A short piece of the server's own error text, so problems are diagnosable from the screen. */
