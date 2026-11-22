@@ -4,7 +4,7 @@
 set -u
 PKG=com.basem.istiqamah
 mkdir -p emulator
-adb install -r Istiqamah.apk
+adb install -r BE.apk
 adb shell pm grant $PKG android.permission.ACCESS_COARSE_LOCATION || true
 adb logcat -c
 adb shell am start -W -n $PKG/com.basem.qiyam.MainActivity

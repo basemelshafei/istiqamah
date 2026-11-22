@@ -1,6 +1,6 @@
-# Istiqamah
+# BE
 
-*Istiqamah (استقامة): steadfastness.* One place to see how your days are going: faith, body, and soon career and wealth. It pulls in data from the apps you already use.
+*Formerly Istiqamah (استقامة, steadfastness).* One place to see how your days are going: faith, body, and soon career and wealth. It pulls in data from the apps you already use.
 
 ## What it shows
 
@@ -23,7 +23,7 @@ Everything is read-only and stays on your phone.
 
 ## Install
 
-Every push to `main` is tested and built by GitHub Actions. The APK and screenshots of every screen are published under **Releases**. Open the latest release on your phone and tap `Istiqamah.apk`.
+Every push to `main` is tested and built by GitHub Actions. The APK and screenshots of every screen are published under **Releases**. Open the latest release on your phone and tap `BE.apk`.
 
 The alarm itself lives in the separate [Qiyam](https://github.com/basemelshafei/qiyam-alarm) app.
 

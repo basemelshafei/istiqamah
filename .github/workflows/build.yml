@@ -36,8 +36,8 @@ jobs:
       - name: Build the optimised release APK
         run: |
           gradle :app:assembleRelease --stacktrace
-          cp app/build/outputs/apk/release/app-release.apk Istiqamah.apk
-          ls -la Istiqamah.apk
+          cp app/build/outputs/apk/release/app-release.apk BE.apk
+          ls -la BE.apk
 
       - name: Enable hardware acceleration for the emulator
         run: |
@@ -74,12 +74,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: Istiqamah build ${{ github.run_number }}
+          name: BE build ${{ github.run_number }}
           make_latest: true
           files: |
-            Istiqamah.apk
+            BE.apk
             screenshots.zip
           body: |
-            Install: open this page on your phone, tap **Istiqamah.apk**, then allow "Install unknown apps" for your browser.
+            Install: open this page on your phone, tap **BE.apk**, then allow "Install unknown apps" for your browser.
             Updates install over the previous version and keep your data.
             Tested: logic and screen tests, plus a smoke test on an Android 14 emulator (every tab opened, no crash).

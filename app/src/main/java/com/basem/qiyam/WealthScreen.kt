@@ -78,7 +78,7 @@ fun WealthScreen() {
         ManualCard(prefs, day)
         AccountsCard(prefs)
         Text(
-            "Read only: Istiqamah can't place trades or move money. Not financial advice.",
+            "Read only: BE can't place trades or move money. Not financial advice.",
             color = Night.Muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 4.dp),
         )
     }

@@ -376,7 +376,7 @@ private fun ConnectedApps(prefs: Prefs) {
         }
         if (status != Health.Status.CONNECTED) {
             Text(
-                "In the Google Health app, turn on sharing with Health Connect (Settings › Health Connect) so your Fitbit Air data reaches Istiqamah.",
+                "In the Google Health app, turn on sharing with Health Connect (Settings › Health Connect) so your Fitbit Air data reaches BE.",
                 color = Night.Muted, fontSize = 13.sp,
             )
         }

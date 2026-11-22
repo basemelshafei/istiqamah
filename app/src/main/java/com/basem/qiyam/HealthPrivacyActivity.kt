@@ -23,7 +23,7 @@ class HealthPrivacyActivity : ComponentActivity() {
                     Page("Your health data") {
                         Card {
                             Text(
-                                "Istiqamah reads your steps, sleep, heart rate, weight and workouts so your Body ring " +
+                                "BE reads your steps, sleep, heart rate, weight and workouts so your Body ring " +
                                     "and gym sessions fill in by themselves.",
                                 color = Night.Text, fontSize = 16.sp,
                             )

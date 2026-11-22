@@ -19,7 +19,7 @@ object Net {
             c.requestMethod = method
             c.connectTimeout = 10_000; c.readTimeout = 20_000
             c.setRequestProperty("Accept", "application/json")
-            c.setRequestProperty("User-Agent", "Istiqamah-Android")
+            c.setRequestProperty("User-Agent", "BE-Android")
             headers.forEach { (k, v) -> c.setRequestProperty(k, v) }
             if (body != null) {
                 c.doOutput = true
