@@ -75,7 +75,8 @@ class TrackerScreenTest {
         assertEquals(PrayerStatus.NONE, log.prayer(today, Prayer.ISHA))
         rule.onNodeWithText("Back to today").performScrollTo().performClick()
         settle()
-        rule.onNodeWithText("Prayers today").assertExists()
+        rule.onNodeWithText("Back to today").assertDoesNotExist()
+        rule.onNodeWithText("Yesterday").assertDoesNotExist()
     }
 
     @Test
