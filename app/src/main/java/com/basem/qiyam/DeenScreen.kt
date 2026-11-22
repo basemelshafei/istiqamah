@@ -51,16 +51,22 @@ fun DeenScreen(onOpenQiyam: () -> Unit) {
     val log = remember { DayLog(ctx) }
     val zone = prefs.zone
     val now = rememberMinute()
-    val day = now.atZone(zone).toLocalDate()
+    // "Today" changes at Fajr, not midnight. Any earlier day can be picked and edited.
+    val today = prefs.dayAt(now)
+    var picked by remember { mutableStateOf<LocalDate?>(null) }
+    val day = picked?.takeIf { !it.isAfter(today) } ?: today
     val times = NightCalculator.prayers(prefs.lat, prefs.lng, prefs.method, day, zone)
     val fmt = DateTimeFormatter.ofPattern("HH:mm").withZone(zone)
     val items = Plan.items(prefs, log, day, zone)
+    val dayName = dayName(day, today)
 
-    Page("Deen", "Today's score ${Plan.pillarScore(items, Pillar.DEEN)} · ${hijri(day)}") {
+    Page("Deen", "$dayName's score ${Plan.pillarScore(items, Pillar.DEEN)} · ${hijri(day)}") {
 
-        // Prayers today, with full status
+        DayPicker(day, today) { picked = it }
+
+        // The day's prayers, with full status
         Card {
-            SectionTitle("Prayers today")
+            SectionTitle(if (day == today) "Prayers today" else "Prayers · ${dayName(day, today, long = true)}")
             Prayer.entries.forEach { p ->
                 val status = log.prayer(day, p)
                 Column(Modifier.testTag("prayer_${p.id}")) {
@@ -79,11 +85,16 @@ fun DeenScreen(onOpenQiyam: () -> Unit) {
                     }
                 }
             }
+            Text(
+                "Prayed it after its time, even the next day? Mark it Late. It still counts.",
+                color = Night.Muted, fontSize = 12.sp,
+            )
         }
 
         // The week at a glance
         Card {
             SectionTitle("This week")
+            Text("Tap a day to open it.", color = Night.Muted, fontSize = 12.sp)
             val monday = day.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
             val week = (0L..6L).map { monday.plusDays(it) }
             Row {
@@ -91,19 +102,21 @@ fun DeenScreen(onOpenQiyam: () -> Unit) {
                 week.forEach { d ->
                     Text(
                         d.dayOfWeek.name.take(1), color = if (d == day) Night.Gold else Night.Muted, fontSize = 12.sp,
+                        fontWeight = if (d == day) FontWeight.Bold else FontWeight.Normal,
                         modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
                 }
             }
+            val pick: (LocalDate) -> Unit = { d -> if (!d.isAfter(today)) picked = d }
             Prayer.entries.forEach { p ->
-                WeekRow(p.label, week, day) { d -> statusColor(log.prayer(d, p)).takeIf { log.prayer(d, p) != PrayerStatus.NONE } }
+                WeekRow(p.label, week, day, today, pick) { d -> statusColor(log.prayer(d, p)).takeIf { log.prayer(d, p) != PrayerStatus.NONE } }
             }
-            WeekRow("Qiyam", week, day) { d -> Rings.Deen.takeIf { prefs.woke(d) || log.done(d, "qiyam") } }
-            WeekRow("Adhkar", week, day) { d ->
+            WeekRow("Qiyam", week, day, today, pick) { d -> Rings.Deen.takeIf { prefs.woke(d) || log.done(d, "qiyam") } }
+            WeekRow("Adhkar", week, day, today, pick) { d ->
                 val n = listOf("adhkar_am", "adhkar_pm").count { log.done(d, it) }
                 when (n) { 2 -> Rings.Deen; 1 -> Night.Warn; else -> null }
             }
-            WeekRow("Quran", week, day) { d ->
+            WeekRow("Quran", week, day, today, pick) { d ->
                 val n = listOf("quran_new", "quran_rev").count { log.done(d, it) }
                 when (n) { 2 -> Rings.Deen; 1 -> Night.Warn; else -> null }
             }
@@ -112,25 +125,25 @@ fun DeenScreen(onOpenQiyam: () -> Unit) {
         // Fasting
         Card {
             SectionTitle("Monday & Thursday fasts")
-            val nextFast = generateSequence(day) { it.plusDays(1) }.first { Plan.isFastDay(it) }
+            val nextFast = generateSequence(today) { it.plusDays(1) }.first { Plan.isFastDay(it) }
             val month = day.withDayOfMonth(1)
             val fastDays = generateSequence(month) { it.plusDays(1) }.takeWhile { it.month == day.month }.filter { Plan.isFastDay(it) }.toList()
             val kept = fastDays.count { log.done(it, "fast") }
             Text(
-                if (Plan.isFastDay(day)) "Today is a fast day." else "Next: ${nextFast.format(DateTimeFormatter.ofPattern("EEEE d MMM"))}. Your Qiyam alarm will remind you about suhoor.",
+                if (Plan.isFastDay(day) && day == today) "Today is a fast day." else "Next: ${nextFast.format(DateTimeFormatter.ofPattern("EEEE d MMM"))}. Your Qiyam alarm will remind you about suhoor.",
                 color = Night.Text, fontSize = 14.sp,
             )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 fastDays.forEach { d ->
                     val done = log.done(d, "fast")
-                    val future = d.isAfter(day)
+                    val future = d.isAfter(today)
                     StatusChip(
                         d.format(DateTimeFormatter.ofPattern("d")), done,
                         Rings.Deen, enabled = !future, modifier = Modifier.weight(1f), compact = true,
                     ) { log.toggle(d, "fast") }
                 }
             }
-            Text("$kept of ${fastDays.count { !it.isAfter(day) }} so far this month", color = Night.Muted, fontSize = 12.sp)
+            Text("$kept of ${fastDays.count { !it.isAfter(today) }} so far this month", color = Night.Muted, fontSize = 12.sp)
         }
 
         // Adhkar
@@ -144,7 +157,7 @@ fun DeenScreen(onOpenQiyam: () -> Unit) {
         }
 
         // Qiyam: a summary from the Qiyam alarm app
-        QiyamCard(prefs, day, onOpenQiyam)
+        QiyamCard(prefs, today, onOpenQiyam)
 
         // Quran
         Card {
@@ -161,8 +174,8 @@ fun DeenScreen(onOpenQiyam: () -> Unit) {
                 },
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatusChip("Memorised today", log.done(day, "quran_new"), Rings.Deen) { log.toggle(day, "quran_new") }
-                StatusChip("Revised today", log.done(day, "quran_rev"), Rings.Deen) { log.toggle(day, "quran_rev") }
+                StatusChip(if (day == today) "Memorised today" else "Memorised", log.done(day, "quran_new"), Rings.Deen) { log.toggle(day, "quran_new") }
+                StatusChip(if (day == today) "Revised today" else "Revised", log.done(day, "quran_rev"), Rings.Deen) { log.toggle(day, "quran_rev") }
             }
             val last30 = (0L..29L).map { day.minusDays(it) }
             Text(
@@ -174,18 +187,60 @@ fun DeenScreen(onOpenQiyam: () -> Unit) {
 }
 
 @Composable
-private fun WeekRow(label: String, week: List<LocalDate>, today: LocalDate, color: (LocalDate) -> Color?) {
+private fun WeekRow(
+    label: String, week: List<LocalDate>, selected: LocalDate, today: LocalDate,
+    onPick: (LocalDate) -> Unit, color: (LocalDate) -> Color?,
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, color = Night.Text, fontSize = 13.sp, modifier = Modifier.width(64.dp))
         week.forEach { d ->
             val c = color(d)
-            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.weight(1f).heightIn(min = 30.dp)
+                    .clickable(enabled = !d.isAfter(today), onClickLabel = "Open ${d.dayOfWeek.name.lowercase()}") { onPick(d) },
+                contentAlignment = Alignment.Center,
+            ) {
                 Box(
                     Modifier.size(14.dp).clip(CircleShape)
                         .background(c ?: if (d.isAfter(today)) Color.Transparent else Night.CardEdge)
-                        .border(1.5.dp, if (d == today) Night.Gold else Color.Transparent, CircleShape),
+                        .border(1.5.dp, if (d == selected) Night.Gold else Color.Transparent, CircleShape),
                 )
             }
+        }
+    }
+}
+
+/** "Today", "Yesterday", or the weekday and date. */
+fun dayName(day: LocalDate, today: LocalDate, long: Boolean = false): String = when (day) {
+    today -> "Today"
+    today.minusDays(1) -> "Yesterday"
+    else -> day.format(DateTimeFormatter.ofPattern(if (long) "EEEE d MMM" else "EEE d MMM"))
+}
+
+/** Step back through earlier days to edit them; forward stops at today. */
+@Composable
+private fun DayPicker(day: LocalDate, today: LocalDate, onPick: (LocalDate?) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().testTag("day_picker"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(onClick = { onPick(day.minusDays(1)) }, modifier = Modifier.heightIn(min = 44.dp)) {
+            Text("‹ Earlier", color = Night.Gold, fontSize = 15.sp)
+        }
+        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(dayName(day, today), color = Night.Text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            if (day != today) Text(day.format(DateTimeFormatter.ofPattern("EEE d MMM")), color = Night.Muted, fontSize = 12.sp)
+        }
+        TextButton(
+            onClick = { onPick(if (day.plusDays(1) == today) null else day.plusDays(1)) },
+            enabled = day.isBefore(today), modifier = Modifier.heightIn(min = 44.dp),
+        ) {
+            Text("Later ›", color = if (day.isBefore(today)) Night.Gold else Night.Muted, fontSize = 15.sp)
+        }
+    }
+    if (day != today) {
+        TextButton(onClick = { onPick(null) }, modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)) {
+            Text("Back to today", color = Night.Gold, fontSize = 14.sp)
         }
     }
 }

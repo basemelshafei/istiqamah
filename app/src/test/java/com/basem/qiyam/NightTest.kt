@@ -24,6 +24,15 @@ class NightTest {
         assertTrue(n.lastThird.isAfter(n.midnight) && n.lastThird.isBefore(n.fajr))
     }
 
+    @Test fun theDayChangesAtFajrNotMidnight() {
+        val day = { t: String -> NightCalculator.dayOf(51.5074, -0.1278, Method.MUSLIM_WORLD_LEAGUE, Instant.parse(t), london) }
+        // London Fajr on 23 Nov 2026 is around 06:00.
+        assertEquals(LocalDate.of(2026, 11, 22), day("2026-11-22T22:30:00Z"))   // evening
+        assertEquals(LocalDate.of(2026, 11, 22), day("2026-11-23T00:40:00Z"))   // after midnight, before Fajr
+        assertEquals(LocalDate.of(2026, 11, 22), day("2026-11-23T04:30:00Z"))   // last third of the night
+        assertEquals(LocalDate.of(2026, 11, 23), day("2026-11-23T07:30:00Z"))   // after Fajr
+    }
+
     @Test fun londonMidsummerStillHasAFajr() {
         val n = NightCalculator.nightStarting(51.5074, -0.1278, Method.MUSLIM_WORLD_LEAGUE, LocalDate.of(2027, 6, 21), london)
         assertTrue(n.length > Duration.ofHours(4))

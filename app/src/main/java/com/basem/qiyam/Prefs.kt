@@ -158,4 +158,7 @@ class Prefs(context: Context) {
     }
 
     val zone: ZoneId get() = ZoneId.systemDefault()
+
+    /** The tracker's "today": it changes at Fajr, not at midnight. */
+    fun dayAt(now: java.time.Instant): LocalDate = NightCalculator.dayOf(lat, lng, method, now, zone)
 }

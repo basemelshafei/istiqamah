@@ -86,6 +86,16 @@ object NightCalculator {
         return NightWindow(evening.maghrib.toInstant(), morning.fajr.toInstant())
     }
 
+    /**
+     * The day you're living in, Islamically: it runs from Fajr to the next Fajr. After midnight
+     * but before Fajr it's still the previous day, so Isha and the night stay on that day.
+     */
+    fun dayOf(lat: Double, lng: Double, method: Method, now: Instant, zone: ZoneId): LocalDate {
+        val date = now.atZone(zone).toLocalDate()
+        val fajr = runCatching { prayers(lat, lng, method, date, zone).fajr }.getOrNull() ?: return date
+        return if (now.isBefore(fajr)) date.minusDays(1) else date
+    }
+
     /** The night we're in now, or (during daytime) the coming night. */
     fun currentOrNext(lat: Double, lng: Double, method: Method, now: Instant, zone: ZoneId): NightWindow {
         val today = now.atZone(zone).toLocalDate()

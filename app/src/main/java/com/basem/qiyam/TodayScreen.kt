@@ -52,7 +52,7 @@ fun TodayScreen(onOpen: (Tab) -> Unit) {
     val log = remember { DayLog(ctx) }
     val zone = prefs.zone
     val now = rememberMinute()
-    val day = now.atZone(zone).toLocalDate()
+    val day = prefs.dayAt(now)
     // Built once per change, not on every redraw.
     val version = Changes.version
     val items = remember(day, version) { Plan.items(prefs, log, day, zone) }

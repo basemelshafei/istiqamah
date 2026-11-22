@@ -63,7 +63,7 @@ fun CareerScreen() {
     val ctx = LocalContext.current
     val prefs = remember { Prefs(ctx) }
     val log = remember { DayLog(ctx) }
-    val day = rememberMinute().atZone(prefs.zone).toLocalDate()
+    val day = prefs.dayAt(rememberMinute())
     val readiness = Career.readiness(prefs)
 
     Page("Career", "${Career.EXAM_CODE} readiness $readiness% · cloud, data, digital manufacturing") {

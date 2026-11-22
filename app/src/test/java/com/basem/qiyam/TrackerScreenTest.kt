@@ -34,7 +34,7 @@ class TrackerScreenTest {
     @get:Rule
     val rule = createAndroidComposeRule<MainActivity>()
 
-    private val today get() = LocalDate.now(Prefs(rule.activity).zone)
+    private val today get() = Prefs(rule.activity).dayAt(java.time.Instant.now())
     private val log get() = DayLog(rule.activity)
 
     private fun settle() = rule.waitForIdle()
@@ -59,6 +59,23 @@ class TrackerScreenTest {
         settle()
         assertEquals(PrayerStatus.JAMAAH, log.prayer(today, Prayer.ASR))
         rule.onNode(chip).assertIsSelected()
+    }
+
+    @Test
+    fun deenTabEditsAnEarlierDay() {
+        rule.onNodeWithTag("tab_deen").performClick()
+        settle()
+        rule.onNodeWithText("‹ Earlier").performClick()
+        settle()
+        rule.onNodeWithText("Yesterday").assertExists()
+        val chip = hasText("Late") and hasAnyAncestor(hasTestTag("prayer_isha"))
+        rule.onNode(chip).performScrollTo().performClick()
+        settle()
+        assertEquals(PrayerStatus.LATE, log.prayer(today.minusDays(1), Prayer.ISHA))
+        assertEquals(PrayerStatus.NONE, log.prayer(today, Prayer.ISHA))
+        rule.onNodeWithText("Back to today").performScrollTo().performClick()
+        settle()
+        rule.onNodeWithText("Prayers today").assertExists()
     }
 
     @Test

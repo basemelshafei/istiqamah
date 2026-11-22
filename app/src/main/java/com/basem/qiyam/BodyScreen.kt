@@ -63,7 +63,7 @@ fun BodyScreen() {
     val prefs = remember { Prefs(ctx) }
     val log = remember { DayLog(ctx) }
     val zone = prefs.zone
-    val day = rememberMinute().atZone(zone).toLocalDate()
+    val day = prefs.dayAt(rememberMinute())
     val monday = day.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
     val week = (0L..6L).map { monday.plusDays(it) }
     val planned = prefs.gymDays
