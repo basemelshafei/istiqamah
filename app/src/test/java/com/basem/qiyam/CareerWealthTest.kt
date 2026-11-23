@@ -95,6 +95,30 @@ class CareerWealthTest {
         assertEquals(1f, Plan.items(prefs, DayLog(ctx), sunday, zone).first { it.id == "code" }.progress)
     }
 
+    @Test fun trading212SummaryCountsAllCashAndUsesItsTotals() {
+        val s = Wealth.parseTrading212Summary(
+            """{"id":1,"currency":"GBP","totalValue":10650.0,
+               "cash":{"availableToTrade":120.5,"inPies":29.5,"reservedForOrders":0},
+               "investments":{"currentValue":10500.0,"totalCost":9800.0,"unrealizedProfitLoss":700.0,"realizedProfitLoss":-35.2}}"""
+        )
+        assertEquals("GBP", s.currency)
+        assertEquals(150.0, s.cash!!, 1e-9)
+        assertEquals(10500.0, s.value!!, 1e-9)
+        assertEquals(9800.0, s.cost!!, 1e-9)
+        assertEquals(-35.2, s.realized!!, 1e-9)
+        // The platform shows Trading 212's totals, not a re-added sum of positions.
+        val pl = Platform("t212", "Trading 212", "GBP", listOf(Holding("A", "", 1.0, 1.0, 2.0)), 0, s.cash, emptyList(), s.value, s.cost, s.realized)
+        assertEquals(10500.0, pl.value, 1e-9)
+        assertEquals(700.0, pl.pnl, 1e-9)
+    }
+
+    @Test fun trading212OldCashShapeStillWorks() {
+        val s = Wealth.parseTrading212Cash("""{"free":100.0,"pieCash":25.0,"blocked":5.0,"invested":900.0,"ppl":60.0,"result":12.0,"total":1090.0}""")
+        assertEquals(130.0, s.cash!!, 1e-9)
+        assertEquals(960.0, s.value!!, 1e-9)
+        assertEquals(900.0, s.cost!!, 1e-9)
+    }
+
     @Test fun trading212AcceptsAWrappedList() {
         val (h, _) = Wealth.parseTrading212Positions("""{"items":[{"quantity":1,"instrument":{"ticker":"VUAG_EQ"},"walletImpact":{"currency":"GBP","currentValue":10.0,"totalCost":9.0}}]}""")
         assertEquals(1, h.size)

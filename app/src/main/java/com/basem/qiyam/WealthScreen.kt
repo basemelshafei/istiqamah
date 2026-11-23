@@ -129,13 +129,17 @@ private fun PlatformSection(pl: Platform, prefs: Prefs) {
         }
         Text(money(total, ccy), color = Night.Text, fontSize = 32.sp, fontWeight = FontWeight.Bold)
         Text(
-            signed(pl.pnl, ccy) + String.format(Locale.US, " (%+.1f%%)", if (pl.cost > 0) pl.pnl / pl.cost * 100 else 0.0) + " all time",
+            signed(pl.pnl, ccy) + String.format(Locale.US, " (%+.1f%%)", if (pl.cost > 0) pl.pnl / pl.cost * 100 else 0.0) + " on what you hold",
             color = if (pl.pnl >= 0) Night.Good else Night.Dawn, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
         )
         Row {
             LabelValue("Invested", money(pl.cost, ccy), Night.Text)
             Spacer(Modifier.width(24.dp))
             pl.cash?.let { LabelValue("Cash", money(it, ccy), Night.Text) }
+            pl.realized?.let {
+                Spacer(Modifier.width(24.dp))
+                LabelValue("Realised", signed(it, ccy), if (it >= 0) Night.Good else Night.Dawn)
+            }
         }
 
         // Value over time (recorded from the day you connected)

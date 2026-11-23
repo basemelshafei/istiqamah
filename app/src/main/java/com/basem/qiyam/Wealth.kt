@@ -23,9 +23,11 @@ data class Pie(val id: Long, val name: String, val value: Double, val invested: 
 data class Platform(
     val id: String, val name: String, val currency: String, val holdings: List<Holding>, val syncedAt: Long,
     val cash: Double? = null, val pies: List<Pie> = emptyList(),
+    /** The platform's own totals, when it reports them (Trading 212's account summary). */
+    val reportedValue: Double? = null, val reportedCost: Double? = null, val realized: Double? = null,
 ) {
-    val value get() = holdings.sumOf { it.value }
-    val cost get() = holdings.sumOf { it.cost }
+    val value get() = reportedValue ?: holdings.sumOf { it.value }
+    val cost get() = reportedCost ?: holdings.sumOf { it.cost }
     val pnl get() = value - cost
 }
 
@@ -72,6 +74,8 @@ object Wealth {
 
     private fun toJson(pl: Platform) = JSONObject().put("id", pl.id).put("name", pl.name).put("ccy", pl.currency).put("at", pl.syncedAt)
         .put("cash", pl.cash ?: JSONObject.NULL)
+        .put("rv", pl.reportedValue ?: JSONObject.NULL).put("rc", pl.reportedCost ?: JSONObject.NULL)
+        .put("rp", pl.realized ?: JSONObject.NULL)
         .put("h", JSONArray().apply { pl.holdings.forEach { put(JSONObject().put("s", it.symbol).put("n", it.name).put("q", it.quantity).put("c", it.cost).put("v", it.value)) } })
         .put("pies", JSONArray().apply { pl.pies.forEach { put(JSONObject().put("id", it.id).put("n", it.name).put("v", it.value).put("i", it.invested)) } })
 
@@ -82,6 +86,9 @@ object Wealth {
             (0 until h.length()).map { i -> h.getJSONObject(i).let { Holding(it.getString("s"), it.optString("n"), it.getDouble("q"), it.getDouble("c"), it.getDouble("v")) } },
             o.optLong("at"),
             cash = if (o.isNull("cash")) null else o.optDouble("cash"),
+            reportedValue = if (!o.has("rv") || o.isNull("rv")) null else o.optDouble("rv"),
+            reportedCost = if (!o.has("rc") || o.isNull("rc")) null else o.optDouble("rc"),
+            realized = if (!o.has("rp") || o.isNull("rp")) null else o.optDouble("rp"),
             pies = o.optJSONArray("pies")?.let { a -> (0 until a.length()).map { i -> a.getJSONObject(i).let { Pie(it.getLong("id"), it.optString("n"), it.getDouble("v"), it.getDouble("i")) } } } ?: emptyList(),
         )
     }
@@ -112,9 +119,13 @@ object Wealth {
                 if (r.first in 200..299) {
                     val (holdings, ccy) = if (path == "positions") parseTrading212Positions(r.second)
                     else parseTrading212Portfolio(r.second) to null
-                    val cash = runCatching { trading212Cash(base, auth) }.getOrNull()
+                    // Headline numbers come from Trading 212's own account summary, so they match its app.
+                    val sum = runCatching { trading212Summary(base, auth) }.getOrNull()
                     val pies = runCatching { trading212Pies(p, base, auth) }.getOrDefault(emptyList())
-                    save(p, Platform("t212", "Trading 212", ccy ?: "GBP", holdings, System.currentTimeMillis(), cash, pies))
+                    save(p, Platform(
+                        "t212", "Trading 212", sum?.currency ?: ccy ?: "GBP", holdings, System.currentTimeMillis(),
+                        sum?.cash, pies, sum?.value, sum?.cost, sum?.realized,
+                    ))
                     return if (holdings.isEmpty()) "Connected, but Trading 212 returned no open positions. Is this key for the account you invest in (Invest or ISA)?"
                     else "Synced ${holdings.size} position${if (holdings.size == 1) "" else "s"}"
                 }
@@ -125,13 +136,45 @@ object Wealth {
         return t212Error(last.first) + detail(last.second)
     }
 
-    /** Free cash in the account, if Trading 212 shares it. */
-    private fun trading212Cash(base: String, auth: String): Double? {
+    data class T212Summary(val currency: String?, val value: Double?, val cost: Double?, val cash: Double?, val realized: Double?)
+
+    /** Account totals: /account/summary, or the older /account/cash for keys that only have that. */
+    private fun trading212Summary(base: String, auth: String): T212Summary? {
         Thread.sleep(1100)
-        val (c, b) = Net.get("$base/account/cash", mapOf("Authorization" to auth))
-        if (c !in 200..299) return null
-        val o = JSONObject(b)
-        return if (o.has("free")) o.optDouble("free") else null
+        val (c, b) = Net.get("$base/account/summary", mapOf("Authorization" to auth))
+        if (c in 200..299) return parseTrading212Summary(b)
+        Thread.sleep(1100)
+        val (c2, b2) = Net.get("$base/account/cash", mapOf("Authorization" to auth))
+        return if (c2 in 200..299) parseTrading212Cash(b2) else null
+    }
+
+    private fun JSONObject?.num(k: String): Double? =
+        this?.takeIf { it.has(k) && !it.isNull(k) }?.optDouble(k)?.takeIf { !it.isNaN() }
+
+    /** /equity/account/summary. Cash counts what's free, what's waiting in pies and what's held for orders. */
+    fun parseTrading212Summary(json: String): T212Summary {
+        val o = JSONObject(json)
+        val cash = o.optJSONObject("cash")
+        val inv = o.optJSONObject("investments")
+        val parts = listOf("availableToTrade", "inPies", "reservedForOrders").mapNotNull { cash.num(it) }
+        return T212Summary(
+            currency = o.optString("currency").ifBlank { null },
+            value = inv.num("currentValue"), cost = inv.num("totalCost"),
+            cash = if (parts.isEmpty()) null else parts.sum(),
+            realized = inv.num("realizedProfitLoss"),
+        )
+    }
+
+    /** The older /equity/account/cash shape. */
+    fun parseTrading212Cash(json: String): T212Summary {
+        val o = JSONObject(json)
+        val parts = listOf("free", "pieCash", "blocked").mapNotNull { o.num(it) }
+        val invested = o.num("invested"); val ppl = o.num("ppl")
+        return T212Summary(
+            currency = null,
+            value = if (invested != null && ppl != null) invested + ppl else null, cost = invested,
+            cash = if (parts.isEmpty()) null else parts.sum(), realized = o.num("result"),
+        )
     }
 
     /** Your pies with value and invested amounts. Names are fetched once and remembered. */
@@ -193,8 +236,8 @@ object Wealth {
                 symbol = ticker.substringBefore("_"),
                 name = inst?.optString("name").orEmpty(),
                 quantity = o.optDouble("quantity", 0.0),
-                cost = w?.optDouble("totalCost") ?: (o.optDouble("averagePricePaid", 0.0) * o.optDouble("quantity", 0.0)),
-                value = w?.optDouble("currentValue") ?: (o.optDouble("currentPrice", 0.0) * o.optDouble("quantity", 0.0)),
+                cost = w.num("totalCost") ?: (o.optDouble("averagePricePaid", 0.0) * o.optDouble("quantity", 0.0)),
+                value = w.num("currentValue") ?: (o.optDouble("currentPrice", 0.0) * o.optDouble("quantity", 0.0)),
             )
         }
         return list to ccy
